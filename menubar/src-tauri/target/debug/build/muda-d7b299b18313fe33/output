@@ -1,0 +1,2 @@
+cargo::rerun-if-env-changed=CARGO_FEATURE_GTK3
+cargo::rerun-if-env-changed=CARGO_FEATURE_GTK4

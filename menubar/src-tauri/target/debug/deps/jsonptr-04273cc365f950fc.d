@@ -1,0 +1,17 @@
+/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/deps/jsonptr-04273cc365f950fc.d: /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/lib.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/assign.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/delete.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/resolve.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/diagnostic.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/pointer.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/pointer/slice.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/token.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/index.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/component.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/../README.md
+
+/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/deps/libjsonptr-04273cc365f950fc.rmeta: /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/lib.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/assign.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/delete.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/resolve.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/diagnostic.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/pointer.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/pointer/slice.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/token.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/index.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/component.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/../README.md
+
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/lib.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/assign.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/delete.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/resolve.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/diagnostic.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/pointer.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/pointer/slice.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/token.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/index.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/component.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/jsonptr-0.7.1/src/../README.md:
+
+# env-dep:CARGO_PKG_VERSION=0.7.1

@@ -1,0 +1,2 @@
+cargo::rerun-if-env-changed=CARGO_FEATURE_LIBAPPINDICATOR
+cargo::rerun-if-env-changed=CARGO_FEATURE_KSNI

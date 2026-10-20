@@ -1,0 +1,10 @@
+/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/deps/tauri_runtime-ccb99e79cc699710.d: /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/lib.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/dpi.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/monitor.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/webview.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/webview_permissions.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/window.rs
+
+/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/deps/libtauri_runtime-ccb99e79cc699710.rmeta: /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/lib.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/dpi.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/monitor.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/webview.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/webview_permissions.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/window.rs
+
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/lib.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/dpi.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/monitor.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/webview.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/webview_permissions.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-runtime-2.12.2/src/window.rs:

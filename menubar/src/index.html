@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>token-pilot 菜单栏</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 16px; background: #1e1e1e; color: #eee; width: 280px; }
+  h1 { font-size: 14px; margin: 0 0 12px; }
+  .big { font-size: 28px; font-weight: 700; }
+  .muted { color: #999; font-size: 12px; }
+  .bar { height: 6px; background: #333; border-radius: 3px; margin: 8px 0; overflow: hidden; }
+  .bar > div { height: 100%; background: #4caf50; }
+  .bar.over > div { background: #f44336; }
+  .row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; }
+</style>
+</head>
+<body>
+  <h1>token-pilot</h1>
+  <div class="muted">今天已烧</div>
+  <div class="big" id="today">$0.00</div>
+  <div class="muted" id="tokens"></div>
+  <div id="budget-area" style="display:none;margin-top:12px">
+    <div class="row"><span class="muted">本月预算</span><span id="budget-text"></span></div>
+    <div class="bar" id="bar"><div id="bar-fill" style="width:0%"></div></div>
+  </div>
+  <div class="muted" style="margin-top:12px" id="updated"></div>
+<script>
+fetch('http://127.0.0.1:8765/summary').then(r=>r.json()).then(s=>{
+  document.getElementById('today').textContent = '$' + (s.today?.costUsd ?? 0).toFixed(2);
+  document.getElementById('tokens').textContent = ((s.today?.tokens ?? 0)/1e6).toFixed(2) + 'M tokens · ' + (s.today?.events ?? 0) + ' 次';
+  if (s.budget) {
+    document.getElementById('budget-area').style.display = 'block';
+    const pct = s.budget.percent ?? 0;
+    document.getElementById('budget-text').textContent = '$' + (s.budget.spentUsd??0).toFixed(2) + ' / $' + (s.budget.monthlyUsd??0).toFixed(2);
+    document.getElementById('bar-fill').style.width = Math.min(pct,100) + '%';
+    if (pct > 100) document.getElementById('bar').classList.add('over');
+  }
+  document.getElementById('updated').textContent = '更新于 ' + (s.updatedAt ?? '');
+}).catch(()=>{ document.getElementById('updated').textContent = '看板未启动（先跑 token-pilot）'; });
+</script>
+</body>
+</html>

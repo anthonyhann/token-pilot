@@ -1,0 +1,7 @@
+cargo:rerun-if-changed=permissions
+cargo:PERMISSION_FILES_PATH=/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/build/tauri-plugin-notification-29da5d42d443dfc2/out/tauri-plugin-notification-permission-files
+cargo:rerun-if-env-changed=REMOVE_UNUSED_COMMANDS
+cargo:GLOBAL_API_SCRIPT_PATH=/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-notification-2.7.0/api-iife.js
+cargo:rustc-check-cfg=cfg(mobile)
+cargo:rustc-check-cfg=cfg(desktop)
+cargo:rustc-cfg=desktop

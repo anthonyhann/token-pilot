@@ -10,6 +10,7 @@ import { detectRetryLoops } from '../core/retry-detector.ts';
 import { savingsAdvice } from '../core/savings.ts';
 import { notify } from '../core/alert.ts';
 import { loadConfig } from '../core/config.ts';
+import { writeSummary } from '../core/metrics.ts';
 import type { UsageEvent } from '../core/schema.ts';
 import type { Adapter } from '../adapters/types.ts';
 
@@ -118,6 +119,7 @@ async function main() {
 
   // 预算
   const cfg = loadConfig();
+  let budgetInfo: { monthlyUsd: number; spentUsd: number; percent: number; overspent: boolean } | undefined;
   if (cfg.monthlyBudgetUsd && cfg.monthlyBudgetUsd > 0) {
     const monthStart = startOfMonth();
     const monthEvents: UsageEvent[] = [];
@@ -126,6 +128,7 @@ async function main() {
     }
     const monthCost = monthEvents.reduce((s, e) => s + costOf(e.model, e.usage).totalUsd, 0);
     const b = evalBudget(monthCost, { monthlyUsd: cfg.monthlyBudgetUsd, usdToCny: cfg.usdToCny });
+    budgetInfo = { monthlyUsd: cfg.monthlyBudgetUsd, spentUsd: b.spentUsd, percent: b.percent, overspent: b.overspent };
     console.log('');
     console.log(`预算：${fmtUsd(b.spentUsd)} / ${fmtUsd(b.budgetUsd)}  ${progressBar(b.percent)}`);
     console.log(`照这个速度，月底预计：${fmtUsd(b.forecastMonthEndUsd)}${b.forecastOverspend ? '（预计超支）' : ''}`);
@@ -139,6 +142,23 @@ async function main() {
     const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
     const forecast = (agg.cost / today) * daysInMonth;
     console.log(`\n照这个速度，月底预计：${fmtUsd(forecast)}`);
+  }
+
+  // 写 metrics-summary.json 给菜单栏/看板读
+  try {
+    const todayStart = startOfToday();
+    const monthStart2 = startOfMonth();
+    const todayEvents: UsageEvent[] = [];
+    const monthEvents2: UsageEvent[] = [];
+    for (const ad of ALL_ADAPTERS) {
+      if (await ad.detect()) {
+        todayEvents.push(...(await ad.readEvents(todayStart)));
+        monthEvents2.push(...(await ad.readEvents(monthStart2)));
+      }
+    }
+    writeSummary(todayEvents, monthEvents2, budgetInfo);
+  } catch {
+    // 写 summary 失败不阻塞主流程
   }
 
   // 打转检测 + 省钱建议（report 命令或 month 时显示）

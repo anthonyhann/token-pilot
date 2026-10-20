@@ -1,0 +1,1 @@
+{"rustc":17329007180185699724,"features":"","declared_features":"","target":0,"profile":0,"path":0,"deps":[[6277900692088374845,"build_script_build",false,16443472836218978716]],"local":[{"RerunIfEnvChanged":{"var":"CARGO_FEATURE_LIBAPPINDICATOR","val":null}},{"RerunIfEnvChanged":{"var":"CARGO_FEATURE_KSNI","val":null}}],"rustflags":[],"config":0,"compile_kind":0}

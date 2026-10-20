@@ -1,0 +1,12 @@
+/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/deps/cookie-3b04b63a81f0a2fb.d: /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/lib.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/builder.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/parse.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/jar.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/delta.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/same_site.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/expiration.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/prefix.rs
+
+/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/deps/libcookie-3b04b63a81f0a2fb.rmeta: /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/lib.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/builder.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/parse.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/jar.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/delta.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/same_site.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/expiration.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/prefix.rs
+
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/lib.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/builder.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/parse.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/jar.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/delta.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/same_site.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/expiration.rs:
+/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cookie-0.18.2/src/prefix.rs:
