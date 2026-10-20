@@ -1,0 +1,94 @@
+# token-pilot
+
+> **你所有 AI 工具的本地账单 + 预算控制器。**
+> 只读本地日志，零入侵，数据不出本机。
+
+我同时用 Claude Code、Codex、Kimi Code，还经常通过它们跑 DeepSeek、GLM 等国产模型。有一天我发现：**我根本答不上来"我这个月给 AI 烧了多少钱"。** 每个工具有自己的用量页，分散、单位不一、没有总账，更没有预算。
+
+所以有了 token-pilot。
+
+```bash
+$ token-pilot today
+
+token-pilot · 今天
+
+按宿主：
+  claude-code       976.00M tokens    $327.93   24826 次
+  kimi-code          13.06M tokens     $36.37     120 次
+  codex              13.98M tokens      $8.30     103 次
+
+按模型：
+  claude-opus-5-5        $140.48
+  glm-5.3                 $22.36   ← 国产模型也算
+  deepseek-v4.1-flash      $8.37   ← 国产模型也算
+  ...
+
+合计：1003.04M tokens · $372.60 · 25016 次调用
+照这个速度，月底预计：$577.53
+```
+
+## 它能做什么
+
+- **本地账单**：一条命令看清今天/本月各工具、各模型烧了多少 token、多少钱
+- **预算控制**：设月度预算，快超了系统通知弹你
+- **打转检测**：揪出"死循环/反复重试"的会话——那些被 Agent 白烧钱还不出活的坑
+- **省钱建议**：识别"贵模型干轻活"，告诉你换个便宜模型每月能省多少
+- **菜单栏**：macOS + Windows 托盘常驻，今日金额一抬头就看到
+
+## 快速开始
+
+```bash
+npm install -g token-pilot    # 或 npx token-pilot today
+
+token-pilot today             # 今天的账单
+token-pilot month             # 本月 + 月底预测 + 打转检测 + 省钱建议
+token-pilot report            # 完整报告
+```
+
+设预算（超了会弹系统通知）：
+
+```bash
+mkdir -p ~/.token-pilot
+echo '{"monthlyBudgetUsd": 300}' > ~/.token-pilot/config.json
+```
+
+## 支持的工具
+
+token-pilot 按"数据深度"分档覆盖，**不假装都能读**：
+
+| 档 | 工具 | 数据深度 |
+|---|---|---|
+| 本地日志直读 | Claude Code / Codex / Kimi Code / pi | 全量 token + 模型 |
+| 本地 SQLite 直读 | OpenCode / Cursor | token |
+| 国产模型归一 | DeepSeek / GLM / Kimi / Qwen / MiniMax / 混元 / MiMo / LongCat / Doubao | 靠宿主日志的 model 字段 + 定价表 |
+| 云端用量 API | Doubao(火山) / OpenAI API / Moonshot | 各厂 usage API |
+| 仅检测 | Antigravity / Augment / CodeBuddy / Copilot / Kilo / Qwen Code / Trae / Windsurf / ZCode / Hermes / Cline | 检测到已安装，但该工具不写本地用量日志 |
+| 桌面端（订阅制） | Kimi.app / ChatGPT.app 等 | 记固定订阅成本（它们不按 token 计费） |
+
+**国产模型不用单独配置**——你用 Claude Code / Kimi Code 跑 DeepSeek、GLM，用量已经在宿主日志里，token-pilot 按 model 归一自动算。
+
+## 设计原则
+
+- **少采集**：只读本地日志，不注入 hook、不改你的配置
+- **快计算**：本地解析，秒出结果
+- **低成本**：零依赖、零后台常驻（除非你开菜单栏）
+- **本地化**：数据不出本机，没有任何遥测上传
+- **能提醒**：预算快超了系统通知
+- **能节流**：打转检测 + 省钱建议，帮你不被 Agent 白烧
+
+## 技术说明
+
+- 采集层：声明式 adapter（一个工具一个文件），读本地 jsonl/SQLite
+- 成本层：`pricing/models.json` 定价表（含国产模型），接受社区 PR 修正
+- 归一层：schema 对齐 LoongSuite Pilot 的 `gen_ai.usage.*` 语义约定（它预留了 cost 字段没填，我们填上）
+- 菜单栏：Tauri（Rust 壳 + TrayIcon），macOS/Windows 同码
+
+> 参考蓝本：[alibaba/loongsuite-pilot](https://github.com/alibaba/loongsuite-pilot)（架构思想）、[ryoppippi/ccusage](https://github.com/ryoppippi/ccusage)（只读日志路线）。token-pilot works standalone, supercharges with LoongSuite Pilot.
+
+## 加一个新工具
+
+见 [docs/adding-an-adapter.md](docs/adding-an-adapter.md)。一个 adapter 一个文件，社区可直接 PR。
+
+## License
+
+MIT
