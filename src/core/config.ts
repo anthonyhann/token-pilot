@@ -1,16 +1,33 @@
-// 配置加载 — ~/.token-pilot/config.json，环境变量优先
+// 配置加载/保存 — ~/.token-pilot/config.json，环境变量优先
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-export interface TokenPilotConfig {
-  monthlyBudgetUsd?: number;   // 月度预算（美元）
-  usdToCny?: number;           // 汇率
-  alertOnPercent?: number;     // 超过预算百分之多少就告警（默认 80）
+export interface PriceOverrideCny {
+  input: number;    // ¥ / 1M tokens
+  output: number;
+  cacheRead?: number;
 }
 
-const CONFIG_PATH = path.join(os.homedir(), '.token-pilot', 'config.json');
+export interface FixedFee {
+  name: string;
+  monthlyCny: number;
+}
+
+export interface TokenPilotConfig {
+  monthlyBudgetUsd?: number;    // 月度预算（美元，旧字段兼容）
+  monthlyBudgetCny?: number;    // 月度预算（人民币，优先）
+  usdToCny?: number;            // 汇率（默认 7.2）
+  alertOnPercent?: number;      // 超过预算百分之多少就告警（默认 80）
+  priceOverrides?: Record<string, PriceOverrideCny>;  // 设置弹窗的模型单价覆写（¥/M）
+  cloudApis?: FixedFee[];       // 云端用量 API 固定月费
+  subscriptions?: FixedFee[];   // 桌面端/会员订阅月费
+}
+
+export const CONFIG_DIR = path.join(os.homedir(), '.token-pilot');
+export const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
+export const DATA_PATH = path.join(CONFIG_DIR, 'dashboard-data.json');
 
 export function loadConfig(): TokenPilotConfig {
   // 环境变量优先
@@ -29,4 +46,20 @@ export function loadConfig(): TokenPilotConfig {
     }
   }
   return {};
+}
+
+export function saveConfig(cfg: TokenPilotConfig): void {
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+}
+
+export function fxRate(cfg: TokenPilotConfig): number {
+  return cfg.usdToCny && cfg.usdToCny > 0 ? cfg.usdToCny : 7.2;
+}
+
+// 月度预算统一折算成 CNY；未设置返回 undefined
+export function monthlyBudgetCny(cfg: TokenPilotConfig): number | undefined {
+  if (cfg.monthlyBudgetCny && cfg.monthlyBudgetCny > 0) return cfg.monthlyBudgetCny;
+  if (cfg.monthlyBudgetUsd && cfg.monthlyBudgetUsd > 0) return cfg.monthlyBudgetUsd * fxRate(cfg);
+  return undefined;
 }

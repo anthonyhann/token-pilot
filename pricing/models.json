@@ -5,17 +5,20 @@
     "claude-opus-5-5":     { "provider": "anthropic", "input": 15.0,  "output": 75.0,  "cacheRead": 1.5,   "cacheCreation": 18.75 },
     "claude-sonnet-4-6":   { "provider": "anthropic", "input": 3.0,   "output": 15.0,  "cacheRead": 0.3,   "cacheCreation": 3.75 },
     "claude-haiku-5-5":    { "provider": "anthropic", "input": 1.0,   "output": 5.0,   "cacheRead": 0.1,   "cacheCreation": 1.25 },
-    "gpt-5":               { "provider": "openai",    "input": 2.5,   "output": 15.0 },
-    "gpt-5-mini":          { "provider": "openai",    "input": 0.5,   "output": 2.0 },
+    "gpt-5":               { "provider": "openai",    "input": 2.5,   "output": 15.0, "cacheRead": 0.25 },
+    "gpt-5-mini":          { "provider": "openai",    "input": 0.5,   "output": 2.0,  "cacheRead": 0.05 },
+    "codex":               { "provider": "openai",    "input": 2.5,   "output": 15.0, "cacheRead": 0.25 },
 
-    "deepseek-v4.1-flash": { "provider": "deepseek",  "input": 0.14,  "output": 0.28 },
-    "deepseek-v4-pro":     { "provider": "deepseek",  "input": 0.55,  "output": 1.10 },
+    "deepseek-v4.1-flash": { "provider": "deepseek",  "input": 0.14,  "output": 0.28, "cacheRead": 0.035 },
+    "deepseek-v4-1-flash": { "provider": "deepseek",  "input": 0.14,  "output": 0.28, "cacheRead": 0.035 },
+    "deepseek-v4-pro":     { "provider": "deepseek",  "input": 0.55,  "output": 1.10, "cacheRead": 0.14 },
 
-    "glm-5.3":             { "provider": "glm",       "input": 0.20,  "output": 0.80 },
-    "glm-5":               { "provider": "glm",       "input": 0.30,  "output": 1.20 },
+    "glm-5.3":             { "provider": "glm",       "input": 0.20,  "output": 0.80, "cacheRead": 0.02 },
+    "glm-5.3-flash":       { "provider": "glm",       "input": 0.10,  "output": 0.40, "cacheRead": 0.01 },
+    "glm-5":               { "provider": "glm",       "input": 0.30,  "output": 1.20, "cacheRead": 0.03 },
 
-    "kimi-k3":             { "provider": "kimi",      "input": 0.30,  "output": 1.20 },
-    "kimi-k2-8":           { "provider": "kimi",      "input": 0.50,  "output": 2.00 },
+    "kimi-k3":             { "provider": "kimi",      "input": 0.30,  "output": 1.20, "cacheRead": 0.03 },
+    "kimi-k2-8":           { "provider": "kimi",      "input": 0.50,  "output": 2.00, "cacheRead": 0.05 },
 
     "qwen3-coder":         { "provider": "qwen",      "input": 0.30,  "output": 1.20 },
     "qwen-max":            { "provider": "qwen",      "input": 0.40,  "output": 1.60 },

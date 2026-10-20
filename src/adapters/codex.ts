@@ -42,7 +42,7 @@ async function* walkJsonl(dir: string): AsyncGenerator<string> {
   }
 }
 
-function parseLine(line: string, file: string): UsageEvent | null {
+function parseLine(line: string, file: string, lineNo: number): UsageEvent | null {
   if (!line.includes('"token_usage_record"')) return null;
   let d: CodexLine;
   try {
@@ -54,15 +54,19 @@ function parseLine(line: string, file: string): UsageEvent | null {
   const u = d.payload?.usage;
   if (!u) return null;
 
-  const input = u.input_tokens ?? 0;
-  const output = u.output_tokens ?? 0;
+  // OpenAI 语义实测：input_tokens 包含 cached_input_tokens（cached 是子集），
+  // total_tokens = input_tokens + output_tokens。
+  // 新输入 = input − cached，缓存部分走 cacheRead 单价，不重复计费。
+  const inputRaw = u.input_tokens ?? 0;
   const cacheRead = u.cached_input_tokens ?? 0;
   const cacheCreation = u.cache_write_input_tokens ?? 0;
+  const output = u.output_tokens ?? 0;
+  const input = Math.max(inputRaw - cacheRead, 0);
 
   return {
     agent: 'codex',
     sessionId: d.payload?.session_id ?? path.basename(file, '.jsonl'),
-    eventId: path.basename(file, '.jsonl'),
+    eventId: `${path.basename(file, '.jsonl')}#${lineNo}`,
     timestamp: d.timestamp ? new Date(d.timestamp).getTime() : 0,
     provider: 'openai',
     model: 'codex', // rollout 里 model 名不稳定，先标 codex
@@ -106,9 +110,11 @@ export const codexAdapter: Adapter = {
       } catch {
         continue;
       }
-      for (const line of content.split('\n')) {
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         if (!line.trim()) continue;
-        const ev = parseLine(line, file);
+        const ev = parseLine(line, file, i);
         if (ev && ev.timestamp >= sinceMs) events.push(ev);
       }
     }

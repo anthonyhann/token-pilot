@@ -40,6 +40,7 @@ export interface UsageEvent {
 
   // 上下文
   workspace?: string;       // 项目路径（用于"哪个项目烧钱"）
+  sessionTitle?: string;    // 会话首条用户消息摘要（可选，用于实时会话行）
 }
 
 // 一个宿主一天/一段时间的聚合

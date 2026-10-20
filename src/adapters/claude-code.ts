@@ -22,6 +22,7 @@ interface ClaudeLine {
   sessionId?: string;
   cwd?: string;
   message?: {
+    id?: string;
     model?: string;
     usage?: ClaudeUsage;
   };
@@ -44,7 +45,7 @@ async function* walkJsonl(dir: string): AsyncGenerator<string> {
   }
 }
 
-function parseLine(line: string, file: string): UsageEvent | null {
+function parseLine(line: string, file: string, lineNo: number): UsageEvent | null {
   if (!line.includes('"usage"')) return null;
   let d: ClaudeLine;
   try {
@@ -61,10 +62,14 @@ function parseLine(line: string, file: string): UsageEvent | null {
   const cacheRead = usage.cache_read_input_tokens ?? 0;
   const cacheCreation = usage.cache_creation_input_tokens ?? 0;
 
+  // eventId 用 message.id 做去重键；缺 id 时退化为 文件+行号（不参与去重）
+  const msgId = d.message?.id;
+  const eventId = msgId ?? `${path.basename(file, '.jsonl')}#${lineNo}`;
+
   return {
     agent: 'claude-code',
     sessionId: d.sessionId ?? path.basename(file, '.jsonl'),
-    eventId: `${path.basename(file, '.jsonl')}`,
+    eventId,
     timestamp: d.timestamp ? new Date(d.timestamp).getTime() : 0,
     provider: providerFromModel(model),
     model,
@@ -96,6 +101,28 @@ function providerFromModel(model: string): string {
   return 'unknown';
 }
 
+// 抓会话标题：首条用户文本消息，截 40 字符
+function grabTitle(line: string, out: Map<string, string>): void {
+  try {
+    const d = JSON.parse(line);
+    if (d?.type !== 'user' || !d?.sessionId) return;
+    if (out.has(d.sessionId)) return;
+    const c = d.message?.content;
+    let text = '';
+    if (typeof c === 'string') text = c;
+    else if (Array.isArray(c)) {
+      const t = c.find((b: { type?: string; text?: string }) => b?.type === 'text' && typeof b.text === 'string');
+      text = t?.text ?? '';
+    }
+    text = text.replace(/\s+/g, ' ').trim();
+    // 跳过系统注入块：xml 标签、[SYSTEM]/[MESSAGE FROM...] 等方括号标签
+    if (!text || text.startsWith('<') || text.startsWith('[')) return;
+    out.set(d.sessionId, text.slice(0, 40));
+  } catch {
+    // 非 JSON 行忽略
+  }
+}
+
 export const claudeCodeAdapter: Adapter = {
   meta: {
     id: 'claude-code',
@@ -114,7 +141,10 @@ export const claudeCodeAdapter: Adapter = {
   },
 
   async readEvents(sinceMs = 0): Promise<UsageEvent[]> {
-    const events: UsageEvent[] = [];
+    // 同一 message.id 会写出多行流式快照（前几行 usage 全零，末行才是真实值）。
+    // 去重策略：按 eventId 分组，保留 totalTokens 最大的一条（ccusage 语义）。
+    const byId = new Map<string, UsageEvent>();
+    const titleBySession = new Map<string, string>();
     for await (const file of walkJsonl(PROJECTS_DIR)) {
       // 文件 mtime 早于 since 就整个跳过（快计算）
       try {
@@ -129,11 +159,26 @@ export const claudeCodeAdapter: Adapter = {
       } catch {
         continue;
       }
-      for (const line of content.split('\n')) {
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         if (!line.trim()) continue;
-        const ev = parseLine(line, file);
-        if (ev && ev.timestamp >= sinceMs) events.push(ev);
+        // 顺手抓会话标题（首条用户文本消息），成本只是一次子串判断
+        if (line.includes('"type":"user"') && line.includes('"content"')) {
+          grabTitle(line, titleBySession);
+        }
+        const ev = parseLine(line, file, i);
+        if (!ev || ev.timestamp < sinceMs) continue;
+        const prev = byId.get(ev.eventId);
+        if (!prev || ev.usage.totalTokens > prev.usage.totalTokens) {
+          byId.set(ev.eventId, ev);
+        }
       }
+    }
+    const events = [...byId.values()];
+    for (const ev of events) {
+      const t = titleBySession.get(ev.sessionId);
+      if (t) ev.sessionTitle = t;
     }
     return events;
   },

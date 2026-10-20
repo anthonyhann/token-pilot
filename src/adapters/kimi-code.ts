@@ -38,14 +38,16 @@ async function* walkJsonl(dir: string): AsyncGenerator<string> {
   }
 }
 
-function parseLine(line: string, file: string): UsageEvent | null {
-  if (!line.includes('"usage"')) return null;
+function parseLine(line: string, file: string, lineNo: number): UsageEvent | null {
+  if (!line.includes('"usage.record"')) return null;
   let d: KimiLine;
   try {
     d = JSON.parse(line);
   } catch {
     return null;
   }
+  // 只认 usage.record；其他类型（context.append_loop_event / agent.message.appended）带 usage 字样但不是计费记录
+  if (d.type !== 'usage.record') return null;
   const u = d.usage;
   if (!u || !d.model) return null;
 
@@ -53,22 +55,21 @@ function parseLine(line: string, file: string): UsageEvent | null {
   const output = u.output ?? 0;
   const cacheRead = u.inputCacheRead ?? 0;
   const cacheCreation = u.inputCacheCreation ?? 0;
-  // kimi 的 input 总量 = inputOther + inputCacheRead + inputCacheCreation
-  const input = inputOther + cacheRead + cacheCreation;
+  // inputOther 是不走缓存的新输入；缓存部分交给 cacheRead/cacheCreation 单价，不能并入 input 重复计费
 
   return {
     agent: 'kimi-code',
     sessionId: path.basename(path.dirname(path.dirname(file))),
-    eventId: path.basename(path.dirname(path.dirname(file))),
+    eventId: `${path.basename(path.dirname(path.dirname(file)))}#${lineNo}`,
     timestamp: d.time ?? 0,
     provider: 'kimi',
     model: d.model,
     usage: {
-      inputTokens: input,
+      inputTokens: inputOther,
       outputTokens: output,
       cacheReadTokens: cacheRead,
       cacheCreationTokens: cacheCreation,
-      totalTokens: input + output,
+      totalTokens: inputOther + output + cacheRead + cacheCreation,
     },
   };
 }
@@ -103,9 +104,11 @@ export const kimiCodeAdapter: Adapter = {
       } catch {
         continue;
       }
-      for (const line of content.split('\n')) {
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         if (!line.trim()) continue;
-        const ev = parseLine(line, file);
+        const ev = parseLine(line, file, i);
         if (ev && ev.timestamp >= sinceMs) events.push(ev);
       }
     }
