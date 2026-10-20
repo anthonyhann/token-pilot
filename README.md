@@ -69,19 +69,21 @@ token-pilot 按"数据深度"分档覆盖，**不假装都能读**：
 
 ## 设计原则
 
-- **少采集**：只读本地日志，不注入 hook、不改你的配置
-- **快计算**：本地解析，秒出结果
-- **低成本**：零依赖、零后台常驻（除非你开菜单栏）
+- **少采集**：只读本地日志，不注入 hook、不改你的配置；流式快照按 message.id 去重，缓存 token 不重复计费
+- **快计算**：本地解析，秒出结果；增量采集（mtime 快跳）
+- **低成本**：零依赖、零后台常驻（除非你开菜单栏/serve）
 - **本地化**：数据不出本机，没有任何遥测上传
 - **能提醒**：预算快超了系统通知
 - **能节流**：打转检测 + 省钱建议，帮你不被 Agent 白烧
+- **可验证**：`python3 scripts/reconcile.py` 独立重算原始日志，与 CLI 输出逐项对账
 
 ## 技术说明
 
 - 采集层：声明式 adapter（一个工具一个文件），读本地 jsonl/SQLite
-- 成本层：`pricing/models.json` 定价表（含国产模型），接受社区 PR 修正
+- 成本层：`pricing/models.json` 定价表（含国产模型 cacheRead 目录价），接受社区 PR 修正
 - 归一层：schema 对齐 LoongSuite Pilot 的 `gen_ai.usage.*` 语义约定（它预留了 cost 字段没填，我们填上）
-- 菜单栏：Tauri（Rust 壳 + TrayIcon），macOS/Windows 同码
+- 看板层：`src/core/contract.ts` 定义 DashboardData 契约 → `aggregate.ts` 单遍聚合 → `serve`（localhost HTTP，设置弹窗可写回配置）或 `dash`（静态 bake）两种形态；web/dashboard.html 与 web/panel.html 共用一份契约
+- 菜单栏：Tauri（Rust 壳 + TrayIcon + 面板窗口），macOS/Windows 同码，60s 自动刷新托盘标题
 
 > 参考蓝本：[alibaba/loongsuite-pilot](https://github.com/alibaba/loongsuite-pilot)（架构思想）、[ryoppippi/ccusage](https://github.com/ryoppippi/ccusage)（只读日志路线）。token-pilot works standalone, supercharges with LoongSuite Pilot.
 
