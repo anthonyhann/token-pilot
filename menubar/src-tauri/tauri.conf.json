@@ -10,12 +10,18 @@
     "devUrl": "http://127.0.0.1:8765"
   },
   "app": {
-    "windows": [],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "tooltip": "token-pilot"
-    },
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Token Pilot",
+        "width": 400,
+        "height": 720,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "decorations": false
+      }
+    ],
     "security": { "csp": null }
   },
   "bundle": {

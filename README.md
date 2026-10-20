@@ -13,27 +13,22 @@ $ token-pilot today
 token-pilot · 今天
 
 按宿主：
-  claude-code       976.00M tokens    $327.93   24826 次
-  kimi-code          13.06M tokens     $36.37     120 次
-  codex              13.98M tokens      $8.30     103 次
+  claude-code       12.85M tokens     $6.41      248 次
+  kimi-code         ...
 
-按模型：
-  claude-opus-5-5        $140.48
-  glm-5.3                 $22.36   ← 国产模型也算
-  deepseek-v4.1-flash      $8.37   ← 国产模型也算
-  ...
-
-合计：1003.04M tokens · $372.60 · 25016 次调用
-照这个速度，月底预计：$577.53
+合计：12.85M tokens · $6.41 · 248 次调用
 ```
+
+> 数字准到什么程度？仓库自带独立对账脚本 `scripts/reconcile.py`（不复用采集代码、第三方视角重算原始日志），月/日 tokens 与调用数逐项相等。
 
 ## 它能做什么
 
 - **本地账单**：一条命令看清今天/本月各工具、各模型烧了多少 token、多少钱
+- **本地看板**：`token-pilot serve` 起本地看板（花费趋势、构成环图、实时流速、活跃会话、省钱建议、适配器状态），10 秒自刷新，数据不出本机
 - **预算控制**：设月度预算，快超了系统通知弹你
 - **打转检测**：揪出"死循环/反复重试"的会话——那些被 Agent 白烧钱还不出活的坑
-- **省钱建议**：识别"贵模型干轻活"，告诉你换个便宜模型每月能省多少
-- **菜单栏**：macOS + Windows 托盘常驻，今日金额一抬头就看到
+- **省钱建议**：识别"贵模型干轻活"、低缓存命中的会话，告诉你每月/每周能省多少
+- **菜单栏**：macOS + Windows 托盘常驻，今日金额+预算进度一抬头就看到
 
 ## 快速开始
 
@@ -43,14 +38,19 @@ npm install -g token-pilot    # 或 npx token-pilot today
 token-pilot today             # 今天的账单
 token-pilot month             # 本月 + 月底预测 + 打转检测 + 省钱建议
 token-pilot report            # 完整报告
+token-pilot serve             # 本地看板 http://127.0.0.1:17895（实时刷新）
+token-pilot dash              # 生成静态看板 ~/.token-pilot/dashboard.html
+token-pilot sync              # 只刷新数据文件 ~/.token-pilot/dashboard-data.json
 ```
 
 设预算（超了会弹系统通知）：
 
 ```bash
 mkdir -p ~/.token-pilot
-echo '{"monthlyBudgetUsd": 300}' > ~/.token-pilot/config.json
+echo '{"monthlyBudgetCny": 1500}' > ~/.token-pilot/config.json
 ```
+
+也可以在看板右上角「数据设置」里直接改：模型单价、云端 API 月费、订阅月费、月度预算。
 
 ## 支持的工具
 
