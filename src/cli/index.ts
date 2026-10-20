@@ -5,6 +5,11 @@ import { claudeCodeAdapter } from '../adapters/claude-code.ts';
 import { codexAdapter } from '../adapters/codex.ts';
 import { kimiCodeAdapter } from '../adapters/kimi-code.ts';
 import { costOf } from '../core/pricing.ts';
+import { evalBudget, progressBar } from '../core/budget.ts';
+import { detectRetryLoops } from '../core/retry-detector.ts';
+import { savingsAdvice } from '../core/savings.ts';
+import { notify } from '../core/alert.ts';
+import { loadConfig } from '../core/config.ts';
 import type { UsageEvent } from '../core/schema.ts';
 import type { Adapter } from '../adapters/types.ts';
 
@@ -111,11 +116,48 @@ async function main() {
   console.log('');
   console.log(`合计：${fmtTokens(agg.tokens)} tokens · ${fmtUsd(agg.cost)} · ${agg.events} 次调用`);
 
-  if (cmd === 'month') {
+  // 预算
+  const cfg = loadConfig();
+  if (cfg.monthlyBudgetUsd && cfg.monthlyBudgetUsd > 0) {
+    const monthStart = startOfMonth();
+    const monthEvents: UsageEvent[] = [];
+    for (const ad of ALL_ADAPTERS) {
+      if (await ad.detect()) monthEvents.push(...(await ad.readEvents(monthStart)));
+    }
+    const monthCost = monthEvents.reduce((s, e) => s + costOf(e.model, e.usage).totalUsd, 0);
+    const b = evalBudget(monthCost, { monthlyUsd: cfg.monthlyBudgetUsd, usdToCny: cfg.usdToCny });
+    console.log('');
+    console.log(`预算：${fmtUsd(b.spentUsd)} / ${fmtUsd(b.budgetUsd)}  ${progressBar(b.percent)}`);
+    console.log(`照这个速度，月底预计：${fmtUsd(b.forecastMonthEndUsd)}${b.forecastOverspend ? '（预计超支）' : ''}`);
+    // 超支告警
+    const threshold = cfg.alertOnPercent ?? 80;
+    if (b.percent >= threshold || b.overspent) {
+      notify('token-pilot 预算告警', `本月已用 ${b.percent.toFixed(0)}%（${fmtUsd(b.spentUsd)} / ${fmtUsd(b.budgetUsd)}）`);
+    }
+  } else if (cmd === 'month') {
     const today = new Date().getDate();
     const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
     const forecast = (agg.cost / today) * daysInMonth;
     console.log(`\n照这个速度，月底预计：${fmtUsd(forecast)}`);
+  }
+
+  // 打转检测 + 省钱建议（report 命令或 month 时显示）
+  if (cmd === 'report' || cmd === 'month') {
+    const alerts = detectRetryLoops(allEvents, (m, u) => costOf(m, u));
+    if (alerts.length > 0) {
+      console.log('\n打转/异常重试检测：');
+      for (const a of alerts.slice(0, 5)) {
+        console.log(`  ⚠️ ${a.agent} · ${a.model} · ${a.calls} 次 · ${fmtUsd(a.totalCostUsd)} — ${a.reason}`);
+      }
+    }
+    const savings = savingsAdvice(allEvents);
+    if (savings.length > 0) {
+      console.log('\n省钱建议：');
+      for (const s of savings) {
+        console.log(`  💡 ${s.observation}`);
+        console.log(`     ${s.suggestion}（约省 ${fmtUsd(s.estimatedSavingsUsdPerMonth)}/月）`);
+      }
+    }
   }
   console.log('');
 }
