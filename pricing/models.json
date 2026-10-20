@@ -1,0 +1,32 @@
+{
+  "_comment": "每 1M token 的美元定价。国产模型为公开目录价的美元估算，欢迎 PR 修正。cacheRead/cacheCreation 缺失时按 input 的一定比例折算。",
+  "_updated": "2026-10-20",
+  "models": {
+    "claude-opus-5-5":     { "provider": "anthropic", "input": 15.0,  "output": 75.0,  "cacheRead": 1.5,   "cacheCreation": 18.75 },
+    "claude-sonnet-4-6":   { "provider": "anthropic", "input": 3.0,   "output": 15.0,  "cacheRead": 0.3,   "cacheCreation": 3.75 },
+    "claude-haiku-5-5":    { "provider": "anthropic", "input": 1.0,   "output": 5.0,   "cacheRead": 0.1,   "cacheCreation": 1.25 },
+    "gpt-5":               { "provider": "openai",    "input": 2.5,   "output": 15.0 },
+    "gpt-5-mini":          { "provider": "openai",    "input": 0.5,   "output": 2.0 },
+
+    "deepseek-v4.1-flash": { "provider": "deepseek",  "input": 0.14,  "output": 0.28 },
+    "deepseek-v4-pro":     { "provider": "deepseek",  "input": 0.55,  "output": 1.10 },
+
+    "glm-5.3":             { "provider": "glm",       "input": 0.20,  "output": 0.80 },
+    "glm-5":               { "provider": "glm",       "input": 0.30,  "output": 1.20 },
+
+    "kimi-k3":             { "provider": "kimi",      "input": 0.30,  "output": 1.20 },
+    "kimi-k2-8":           { "provider": "kimi",      "input": 0.50,  "output": 2.00 },
+
+    "qwen3-coder":         { "provider": "qwen",      "input": 0.30,  "output": 1.20 },
+    "qwen-max":            { "provider": "qwen",      "input": 0.40,  "output": 1.60 },
+
+    "doubao-seed-2-1-pro": { "provider": "doubao",    "input": 0.15,  "output": 0.60 },
+    "doubao-seed-2-0-lite":{ "provider": "doubao",    "input": 0.05,  "output": 0.20 },
+
+    "minimax-m3":          { "provider": "minimax",   "input": 0.30,  "output": 1.20 },
+    "hunyuan-large":       { "provider": "hunyuan",   "input": 0.40,  "output": 1.60 },
+    "mimo-v2":             { "provider": "mimo",      "input": 0.20,  "output": 0.80 },
+    "longcat-flash":       { "provider": "longcat",   "input": 0.15,  "output": 0.60 }
+  },
+  "fallback": { "input": 1.0, "output": 5.0, "_note": "未知模型按此估算" }
+}
