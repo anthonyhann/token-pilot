@@ -54,7 +54,7 @@ function parseLine(line: string, file: string): UsageEvent | null {
   }
   const usage = d.message?.usage;
   const model = d.message?.model;
-  if (!usage || !model || model === '<synthetic>') return null;
+  if (!usage || !model || model === '<synthetic>' || model === 'error') return null;
 
   const input = usage.input_tokens ?? 0;
   const output = usage.output_tokens ?? 0;

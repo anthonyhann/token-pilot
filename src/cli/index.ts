@@ -1,9 +1,14 @@
 #!/usr/bin/env node
-// token-pilot CLI
+// token-pilot CLI — 多宿主聚合
 
 import { claudeCodeAdapter } from '../adapters/claude-code.ts';
+import { codexAdapter } from '../adapters/codex.ts';
+import { kimiCodeAdapter } from '../adapters/kimi-code.ts';
 import { costOf } from '../core/pricing.ts';
 import type { UsageEvent } from '../core/schema.ts';
+import type { Adapter } from '../adapters/types.ts';
+
+const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCodeAdapter];
 
 function startOfToday(): number {
   const d = new Date();
@@ -17,23 +22,35 @@ function startOfMonth(): number {
   return d.getTime();
 }
 
+interface CellAgg {
+  tokens: number;
+  cost: number;
+  events: number;
+}
+type Key = string;
 interface Agg {
   tokens: number;
   cost: number;
   events: number;
-  models: Map<string, { tokens: number; cost: number }>;
+  byAgent: Map<Key, CellAgg>;
+  byModel: Map<Key, CellAgg>;
 }
 
 function aggregate(events: UsageEvent[]): Agg {
-  const agg: Agg = { tokens: 0, cost: 0, events: events.length, models: new Map() };
+  const agg: Agg = { tokens: 0, cost: 0, events: events.length, byAgent: new Map(), byModel: new Map() };
   for (const e of events) {
     const c = costOf(e.model, e.usage);
-    agg.tokens += e.usage.totalTokens;
+    const tok = e.usage.totalTokens;
+    agg.tokens += tok;
     agg.cost += c.totalUsd;
-    const m = agg.models.get(e.model) ?? { tokens: 0, cost: 0 };
-    m.tokens += e.usage.totalTokens;
-    m.cost += c.totalUsd;
-    agg.models.set(e.model, m);
+
+    for (const [map, key] of [[agg.byAgent, e.agent], [agg.byModel, e.model]] as const) {
+      const cell = map.get(key) ?? { tokens: 0, cost: 0, events: 0 };
+      cell.tokens += tok;
+      cell.cost += c.totalUsd;
+      cell.events += 1;
+      map.set(key, cell);
+    }
   }
   return agg;
 }
@@ -47,35 +64,49 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
+function printMap(title: string, map: Map<Key, CellAgg>) {
+  console.log(title);
+  const sorted = [...map.entries()].sort((a, b) => b[1].cost - a[1].cost);
+  for (const [key, c] of sorted) {
+    console.log(`  ${key.padEnd(30)} ${fmtTokens(c.tokens).padStart(9)} tokens   ${fmtUsd(c.cost).padStart(9)}   ${c.events} 次`);
+  }
+}
+
 async function main() {
   const cmd = process.argv[2] ?? 'today';
-
   const since =
     cmd === 'today' ? startOfToday() :
     cmd === 'month' ? startOfMonth() :
     0;
 
-  console.log(`\ntoken-pilot · ${cmd === 'today' ? '今天' : cmd === 'month' ? '本月' : '全部'}\n`);
+  const label = cmd === 'today' ? '今天' : cmd === 'month' ? '本月' : '全部';
+  console.log(`\ntoken-pilot · ${label}\n`);
 
-  if (!(await claudeCodeAdapter.detect())) {
-    console.log('未检测到 Claude Code（~/.claude 不存在）');
-    return;
+  const allEvents: UsageEvent[] = [];
+  const detected: string[] = [];
+  const noData: string[] = [];
+  for (const ad of ALL_ADAPTERS) {
+    if (!(await ad.detect())) continue;
+    detected.push(ad.meta.displayName);
+    const evs = await ad.readEvents(since);
+    if (evs.length === 0) noData.push(ad.meta.displayName);
+    allEvents.push(...evs);
   }
 
-  const events = await claudeCodeAdapter.readEvents(since);
-  if (events.length === 0) {
+  console.log(`已检测宿主：${detected.join('、') || '无'}`);
+  if (noData.length) console.log(`（${noData.join('、')} 该时段无用量）`);
+  console.log('');
+
+  if (allEvents.length === 0) {
     console.log('该时段无用量记录');
     return;
   }
 
-  const agg = aggregate(events);
+  const agg = aggregate(allEvents);
 
-  // 按模型分
-  console.log('按模型：');
-  const sorted = [...agg.models.entries()].sort((a, b) => b[1].cost - a[1].cost);
-  for (const [model, m] of sorted) {
-    console.log(`  ${model.padEnd(28)} ${fmtTokens(m.tokens).padStart(8)} tokens   ${fmtUsd(m.cost).padStart(8)}`);
-  }
+  printMap('按宿主：', agg.byAgent);
+  console.log('');
+  printMap('按模型：', agg.byModel);
 
   console.log('');
   console.log(`合计：${fmtTokens(agg.tokens)} tokens · ${fmtUsd(agg.cost)} · ${agg.events} 次调用`);
