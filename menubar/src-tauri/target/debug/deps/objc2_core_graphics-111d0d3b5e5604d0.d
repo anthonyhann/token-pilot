@@ -1,8 +1,0 @@
-/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/deps/objc2_core_graphics-111d0d3b5e5604d0.d: /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/lib.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/generated/mod.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/generated/CGDirectDisplay.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/thread_safety.rs
-
-/Users/hanqiang/www/ai/token-pilot/menubar/src-tauri/target/debug/deps/libobjc2_core_graphics-111d0d3b5e5604d0.rmeta: /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/lib.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/generated/mod.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/generated/CGDirectDisplay.rs /Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/thread_safety.rs
-
-/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/lib.rs:
-/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/generated/mod.rs:
-/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/generated/CGDirectDisplay.rs:
-/Users/hanqiang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-core-graphics-0.3.2/src/thread_safety.rs:
