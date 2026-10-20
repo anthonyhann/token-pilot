@@ -118,10 +118,10 @@ export async function buildDashboardData(
   const d7 = nowMs - 7 * 86400_000;
 
   const today = newAgg(); const week = newAgg(); const month = newAgg(); const last30 = newAgg();
-  const dayMap = new Map<number, { cost: number; tokens: number; calls: number }>();
-
-  // 今日成本分项
-  const split = { cacheRead: 0, cacheWrite: 0, output: 0, newInput: 0 };
+  // 14/28 天日序列种子（六指标全记，统计卡 mini 要用）
+  interface DayAgg { cost: number; tokens: number; calls: number; output: number; cacheRead: number; cacheCreation: number; input: number }
+  const dayMap = new Map<number, DayAgg>();
+  for (let i = 0; i < 28; i++) dayMap.set(d28 + i * 86400_000, { cost: 0, tokens: 0, calls: 0, output: 0, cacheRead: 0, cacheCreation: 0, input: 0 });
 
   // per-model / per-agent / per-project（今日，供排行榜与速率子行）
   interface Cell { cost: number; tokens: number; calls: number; output: number; cacheRead: number; cacheCreation: number; input: number; lastTs: number; agent: string }
@@ -129,8 +129,8 @@ export async function buildDashboardData(
   const byAgent = new Map<string, Cell>();
   const byProj = new Map<string, Cell>();
 
-  // 14/28 天日序列种子
-  for (let i = 0; i < 28; i++) dayMap.set(d28 + i * 86400_000, { cost: 0, tokens: 0, calls: 0 });
+  // 今日成本分项
+  const split = { cacheRead: 0, cacheWrite: 0, output: 0, newInput: 0 };
 
   // 速率样本（同会话相邻事件）
   let prevBySession = new Map<string, { ts: number }>();
@@ -178,13 +178,14 @@ export async function buildDashboardData(
 
     // 日序列
     if (ts >= d28) {
-      const dayStart = t0 - Math.floor((nowMs - ts) / 86400_000) * 86400_000;
-      // 对齐到当地 0 点：用日期字符串更稳
+      // 对齐到当地 0 点
       const d = new Date(ts); d.setHours(0, 0, 0, 0);
-      const key = d.getTime();
-      const dp = dayMap.get(key);
-      if (dp) { dp.cost += cost; dp.tokens += u.totalTokens; dp.calls++; }
-      void dayStart;
+      const dp = dayMap.get(d.getTime());
+      if (dp) {
+        dp.cost += cost; dp.tokens += u.totalTokens; dp.calls++;
+        dp.output += u.outputTokens; dp.cacheRead += u.cacheReadTokens;
+        dp.cacheCreation += u.cacheCreationTokens; dp.input += u.inputTokens;
+      }
     }
 
     // 速率样本
@@ -223,13 +224,16 @@ export async function buildDashboardData(
 
   // ---------- 日序列输出 ----------
   const days: DayPoint[] = [];
+  const dayAggs: DayAgg[] = [];
   for (let i = 0; i < 28; i++) {
     const t = d28 + i * 86400_000;
     const d = new Date(t);
-    const dp = dayMap.get(t) ?? { cost: 0, tokens: 0, calls: 0 };
+    const dp = dayMap.get(t) ?? { cost: 0, tokens: 0, calls: 0, output: 0, cacheRead: 0, cacheCreation: 0, input: 0 };
+    dayAggs.push(dp);
     days.push({ date: `${d.getMonth() + 1}/${d.getDate()}`, weekday: `周${WD[d.getDay()]}`, costUsd: dp.cost, tokens: dp.tokens, calls: dp.calls });
   }
   const days14 = days.slice(14);
+  const dayAggs14 = dayAggs.slice(14);
 
   // ---------- 预算 ----------
   const budgetCny = monthlyBudgetCny(cfg);
@@ -306,7 +310,7 @@ export async function buildDashboardData(
   const live = buildLive(events, sessMap, nowMs);
 
   // ---------- 统计卡 ----------
-  const stats = buildStats(today, week, month, dayOfMonth, days14, speedToday, speedByDay, d14, t0);
+  const stats = buildStats(today, month, last30, dayOfMonth, dayAggs14, speedToday, speedByDay, d14);
 
   // ---------- 趋势 ----------
   const sum14Cny = days14.reduce((s, d) => s + d.costUsd, 0) * fx;
@@ -550,41 +554,46 @@ function p90(arr: number[]): number {
   return s[Math.min(s.length - 1, Math.floor(s.length * 0.9))];
 }
 
+interface DayAggFull { cost: number; tokens: number; calls: number; output: number; cacheRead: number; cacheCreation: number; input: number }
+
 function buildStats(
   today: { costUsd: number; tokens: number; output: number; calls: number; cacheRead: number; cacheCreation: number; input: number },
-  _week: unknown,
-  month: { tokens: number },
+  month: { tokens: number; cacheRead: number; cacheCreation: number; input: number },
+  last30: { cacheRead: number; cacheCreation: number; input: number },
   dayOfMonth: number,
-  days14: DayPoint[],
+  dayAggs14: DayAggFull[],
   speedToday: number[],
   speedByDay: Map<number, number[]>,
-  _d14: number,
-  _t0: number,
+  d14: number,
 ): DashboardData['stats'] {
   const monthDailyAvgTok = month.tokens / dayOfMonth;
   const todayHit = (today.cacheRead + today.cacheCreation + today.input) > 0
     ? (today.cacheRead / (today.cacheRead + today.cacheCreation + today.input)) * 100 : 0;
-  const hit30 = todayHit; // 30 天口径由 hero 承载，这里副行给今日
-  const mini = (vals: number[]) => vals;
+  const hit30d = (last30.cacheRead + last30.cacheCreation + last30.input) > 0
+    ? (last30.cacheRead / (last30.cacheRead + last30.cacheCreation + last30.input)) * 100 : 0;
   const speedMed = median(speedToday);
   const speedP90 = p90(speedToday);
   const avgInPerCall = today.calls > 0 ? (today.input + today.cacheRead + today.cacheCreation) / today.calls : 0;
 
-  const speedMini: number[] = days14.map((d) => {
-    void d;
-    return 0;
+  // 各卡的 14 天 mini 序列（各用各的指标）
+  const hitOfDay = (d: DayAggFull) => {
+    const dn = d.cacheRead + d.cacheCreation + d.input;
+    return dn > 0 ? (d.cacheRead / dn) * 100 : 0;
+  };
+  const speedMini: number[] = dayAggs14.map((_, i) => {
+    const dayStart = d14 + i * 86400_000;
+    return median(speedByDay.get(dayStart) ?? []);
   });
-  void speedMini;
 
   return {
-    tokens: { value: fmtTok(today.tokens), sub: `日均 ${fmtTok(monthDailyAvgTok)}`, mini: mini(days14.map((d) => d.tokens)) },
-    output: { value: fmtTok(today.output), sub: today.tokens > 0 ? `占今日总量 ${Math.round((today.output / today.tokens) * 100)}%` : '—', mini: mini(days14.map((d) => d.tokens)) },
-    cacheRead: { value: fmtTok(today.cacheRead), sub: `占读入 ${todayHit.toFixed(1)}%`, mini: mini(days14.map((d) => d.tokens)) },
-    cacheWrite: { value: fmtTok(today.cacheCreation), sub: '新写进提示缓存', mini: mini(days14.map((d) => d.tokens)) },
-    newInput: { value: fmtTok(today.input), sub: '不走缓存的输入', mini: mini(days14.map((d) => d.tokens)) },
-    hitRate: { value: `${todayHit.toFixed(1)}%`, sub: `今日 · 调用 ${today.calls} 次`, mini: mini(days14.map((d) => d.calls)) },
-    speed: { value: speedMed.toFixed(1), sub: `中位 ${speedMed.toFixed(1)} · P90 ${speedP90.toFixed(0)} tok/s`, mini: mini(days14.map((d) => d.calls)) },
-    calls: { value: String(today.calls), sub: `每次读入 ${fmtTok(avgInPerCall)}`, mini: mini(days14.map((d) => d.calls)) },
+    tokens: { value: fmtTok(today.tokens), sub: `日均 ${fmtTok(monthDailyAvgTok)}`, mini: dayAggs14.map((d) => d.tokens) },
+    output: { value: fmtTok(today.output), sub: today.tokens > 0 ? `占今日总量 ${Math.round((today.output / today.tokens) * 100)}%` : '—', mini: dayAggs14.map((d) => d.output) },
+    cacheRead: { value: fmtTok(today.cacheRead), sub: `占读入 ${todayHit.toFixed(1)}%`, mini: dayAggs14.map((d) => d.cacheRead) },
+    cacheWrite: { value: fmtTok(today.cacheCreation), sub: '新写进提示缓存', mini: dayAggs14.map((d) => d.cacheCreation) },
+    newInput: { value: fmtTok(today.input), sub: '不走缓存的输入', mini: dayAggs14.map((d) => d.input) },
+    hitRate: { value: `${hit30d.toFixed(1)}%`, sub: `近 30 天 · 今日 ${todayHit.toFixed(0)}%`, mini: dayAggs14.map(hitOfDay) },
+    speed: { value: speedMed.toFixed(1), sub: `中位 ${speedMed.toFixed(1)} · P90 ${speedP90.toFixed(0)} tok/s`, mini: speedMini },
+    calls: { value: String(today.calls), sub: `每次读入 ${fmtTok(avgInPerCall)}`, mini: dayAggs14.map((d) => d.calls) },
   };
 }
 
