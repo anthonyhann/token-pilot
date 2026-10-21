@@ -4,3 +4,4 @@ dist/
 .DS_Store
 menubar/src-tauri/target/
 docs/
+!docs/assets

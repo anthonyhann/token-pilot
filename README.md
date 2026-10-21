@@ -13,7 +13,7 @@
 [![Tests](https://img.shields.io/badge/tests-22%20passing-brightgreen)](tests/)
 [![Accuracy](https://img.shields.io/badge/对账脚本-逐项一致-blue)](#-数据准确性)
 
-[快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [English](#-english) · [llms.txt](llms.txt)
+[快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [TODO](#-todo-list) · [English](README-en.md) · [llms.txt](llms.txt)
 
 </div>
 
@@ -107,9 +107,38 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 
 - **2026-10-21** v0.1.0：首版 → CLI 账单 + 本地看板 + macOS/Windows 状态栏应用，三形态一次给齐
 
+## ✅ TODO LIST
+
+**采集覆盖**
+- [ ] OpenCode adapter（SQLite，`~/.local/share/opencode/opencode.db`）
+- [ ] Qoder adapter（仅会话数，model 全为 auto）
+- [ ] pi adapter
+- [ ] Cursor spike（SQLite 结构验证中）
+- [ ] 云端用量 API 接入：Doubao 火山（arkcli usage）/ OpenAI / Kimi 开放平台
+
+**节流（Step 2）**
+- [ ] token 压缩建议（LLMLingua 路线，事后分析层）
+- [ ] 低价模型路由（本地代理层，可选开启，默认不动你任何配置）
+- [ ] 异常重试自动熔断提醒（已有检测，加主动通知策略）
+
+**平台与工程**
+- [x] macOS 状态栏应用（arm64 .app/.dmg）
+- [x] Windows 核查 + 分平台图标 + CI
+- [ ] Windows .msi 实机验证（Actions 产物）
+- [ ] Intel Mac 包（universal2）
+- [ ] 自动更新（tauri-updater）
+- [ ] 签名与公证（Apple Developer $99/年，有赞助再开）
+
+**内容**
+- [x] 中英双语 README
+- [ ] 发布 X 首发帖 + YouTube/B站 demo 视频
+- [ ] 周报到 X（可选）
+
 ## English
 
-**token-pilot** — local billing + budget control for all your AI coding tools. Reads local logs only (no hooks, no telemetry). CLI + local dashboard + menubar app (macOS/Windows). Chinese models (DeepSeek/GLM/Kimi…) auto-normalized via host log `model` field. [Quickstart](#-快速开始) works in any language: `npm install -g token-pilot && token-pilot month`.
+**[README in English → README-en.md](README-en.md)**
+
+*token-pilot* — local billing + budget control for all your AI coding tools. Reads local logs only (no hooks, no telemetry). CLI + local dashboard + menubar app (macOS/Windows). Chinese models (DeepSeek/GLM/Kimi…) auto-normalized via host-log `model` field.
 
 ## License
 
