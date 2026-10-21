@@ -93,11 +93,11 @@ fn spawn_sync() {
     }
 }
 
-/// 数据文件不存在或 mtime 超过 90s
+/// 数据文件不存在或 mtime 超过 45s
 fn data_stale() -> bool {
     match fs::metadata(data_path()) {
         Ok(m) => match m.modified() {
-            Ok(t) => t.elapsed().map(|e| e.as_secs() > 90).unwrap_or(true),
+            Ok(t) => t.elapsed().map(|e| e.as_secs() > 45).unwrap_or(true),
             Err(_) => true,
         },
         Err(_) => true,
@@ -269,7 +269,7 @@ fn main() {
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&title_i, &panel_i, &dash_i, &quit_i])?;
 
-            let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png"))
+            let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
                 .expect("tray icon png");
             let initial_title = data
                 .as_ref()
@@ -305,12 +305,12 @@ fn main() {
                 update_tray(&tray, &title_i, v);
             }
 
-            // 每 60s：数据缺失或超过 90s 未更新 → 后台 token-pilot sync；然后重读并刷新托盘
+            // 每 20s：数据缺失或超过 45s 未更新 → 后台 token-pilot sync（有单飞锁，不堆积）；然后重读刷新托盘
             {
                 let tray_h = tray.clone();
                 let item_h = title_i.clone();
                 std::thread::spawn(move || loop {
-                    std::thread::sleep(Duration::from_secs(60));
+                    std::thread::sleep(Duration::from_secs(20));
                     if data_stale() {
                         spawn_sync();
                     }

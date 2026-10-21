@@ -469,29 +469,72 @@ function projKey(e: UsageEvent): string {
 }
 
 // ---------- 实时流速 ----------
+// tok/s 记账口径修复：日志里一条事件的 tokens 全记在「调用完成时刻」，
+// 直接分桶会把整个生成过程的量压进一个 20s 桶（虚高尖峰+滞后）。
+// 修复：把每条事件的 output/ctx 按 [同会话上一事件时刻, 完成时刻] 匀速分摊
+// （上限 120s 防长停顿稀释），总量不变，速率曲线回到真实形状。
+const MAX_SPAN_MS = 120_000;
+
 function buildLive(events: (UsageEvent & { _costUsd: number })[], sessMap: Map<string, { agent: string; model: string; lastTs: number; label: string; title?: string }>, nowMs: number): LiveData {
   const BUCKET = 20_000;
   const N60 = 180; // 60 分钟
-  const buckets = new Array<number>(N60).fill(0);
+  const outB = new Array<number>(N60).fill(0);
+  const ctxB = new Array<number>(N60).fill(0);
   const t0 = nowMs - N60 * BUCKET;
+  const t10 = nowMs - 600_000;
+  const m1 = nowMs - 60_000;
+
+  // 会话分钟桶（spark 用）：key → 10 个 60s 桶
+  const sessSpark = new Map<string, number[]>();
+  let calls60 = 0;
+
+  const prevTs = new Map<string, number>();
   for (const e of events) {
+    const sk = `${e.agent}:${e.sessionId}`;
+    const prev = prevTs.get(sk);
+    prevTs.set(sk, e.timestamp);
+    if (e.timestamp >= m1) calls60++;
     if (e.timestamp < t0) continue;
-    const idx = Math.floor((e.timestamp - t0) / BUCKET);
-    if (idx >= 0 && idx < N60) buckets[idx] += e.usage.outputTokens;
+
+    const spanStart = Math.max(prev ?? 0, e.timestamp - MAX_SPAN_MS, t0);
+    const span = Math.max(e.timestamp - spanStart, 1000);
+    const out = e.usage.outputTokens;
+    const ctx = e.usage.inputTokens + e.usage.cacheReadTokens + e.usage.cacheCreationTokens;
+    if (out === 0 && ctx === 0) continue;
+
+    const i0 = Math.max(0, Math.floor((spanStart - t0) / BUCKET));
+    const i1 = Math.min(N60 - 1, Math.floor((e.timestamp - t0) / BUCKET));
+    for (let i = i0; i <= i1; i++) {
+      const b0 = t0 + i * BUCKET;
+      const ov = Math.min(b0 + BUCKET, e.timestamp) - Math.max(b0, spanStart);
+      if (ov <= 0) continue;
+      outB[i] += (out * ov) / span;
+      ctxB[i] += (ctx * ov) / span;
+    }
+
+    // 会话 spark：近 10 分钟内的部分按同样口径分摊到 60s 桶
+    if (e.timestamp >= t10) {
+      let spark = sessSpark.get(sk);
+      if (!spark) { spark = new Array<number>(10).fill(0); sessSpark.set(sk, spark); }
+      const s0 = Math.max(spanStart, t10);
+      const j0 = Math.max(0, Math.floor((s0 - t10) / 60_000));
+      const j1 = Math.min(9, Math.floor((e.timestamp - t10) / 60_000));
+      const sSpan = Math.max(e.timestamp - s0, 1000);
+      for (let j = j0; j <= j1; j++) {
+        const b0 = t10 + j * 60_000;
+        const ov = Math.min(b0 + 60_000, e.timestamp) - Math.max(b0, s0);
+        if (ov <= 0) continue;
+        spark[j] += (out * ov) / sSpan;
+      }
+    }
   }
-  const rates = buckets.map((v) => v / 20);
+
+  const rates = outB.map((v) => v / 20);
   let peak = 0; let peakIdx = 0;
   rates.forEach((r, i) => { if (r > peak) { peak = r; peakIdx = i; } });
-
-  const m1 = nowMs - 60_000;
-  let out60 = 0; let ctx60 = 0; let calls60 = 0;
-  for (let i = events.length - 1; i >= 0; i--) {
-    const e = events[i];
-    if (e.timestamp < m1) break;
-    out60 += e.usage.outputTokens;
-    ctx60 += e.usage.inputTokens + e.usage.cacheReadTokens + e.usage.cacheCreationTokens;
-    calls60++;
-  }
+  // 当前/上下文：近 60s = 末 3 桶
+  const out60 = outB[N60 - 1] + outB[N60 - 2] + outB[N60 - 3];
+  const ctx60 = ctxB[N60 - 1] + ctxB[N60 - 2] + ctxB[N60 - 3];
 
   // 会话：近 30 分钟有事件的进入列表
   const sessions: LiveSession[] = [];
@@ -503,19 +546,15 @@ function buildLive(events: (UsageEvent & { _costUsd: number })[], sessMap: Map<s
     const active = nowMs - s.lastTs < 120_000;
     if (active) activeCount++; else idleCount++;
     if (sessions.length >= 5) continue;
-    // 近 10 分钟输出 / 近 60s 速率 / spark（10×60s 桶）
-    const spark = new Array<number>(10).fill(0);
-    let out10 = 0; let out60s = 0;
-    const t10 = nowMs - 600_000;
+    // out10min 仍是原始量（计数不是速率）；rate/spark 用分摊后的分钟桶
+    let out10 = 0;
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i];
       if (e.timestamp < t10) break;
       if (`${e.agent}:${e.sessionId}` !== key) continue;
       out10 += e.usage.outputTokens;
-      if (e.timestamp >= m1) out60s += e.usage.outputTokens;
-      const bi = Math.floor((e.timestamp - t10) / 60_000);
-      if (bi >= 0 && bi < 10) spark[bi] += e.usage.outputTokens;
     }
+    const spark = sessSpark.get(key) ?? new Array<number>(10).fill(0);
     sessions.push({
       key,
       label: s.title ? `${s.label} · ${s.title}` : s.label,
@@ -523,7 +562,7 @@ function buildLive(events: (UsageEvent & { _costUsd: number })[], sessMap: Map<s
       active,
       ago: agoLabel(s.lastTs, nowMs),
       out10min: out10,
-      rateTokS: out60s / 60,
+      rateTokS: spark[9] / 60,
       spark: spark.map((v) => v / 60),
     });
   }
