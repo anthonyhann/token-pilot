@@ -135,35 +135,59 @@ fn open_dashboard_impl(app: &tauri::AppHandle) {
 
 /// 把面板定位到托盘图标下方（CatPaw 式 dropdown）；
 /// 空间不够就翻到图标上方（Windows 底栏场景），左右贴边时收进屏幕。
+///
+/// 坐标系注意（读 tray-icon 0.25 源码确认）：macOS 下 rect 是**逻辑坐标（points）**，
+/// 左上角原点（crate 已做 Y 翻转）。先统一换算成物理坐标再算。
+/// 多显示器注意：set_position 的换算跟随窗口当前所在显示器的缩放，
+/// 所以先把窗口扔到目标显示器中心，再精确落位。
 fn position_panel_at(w: &tauri::WebviewWindow, rect: &tauri::Rect) {
+    let scale0 = w.scale_factor().unwrap_or(1.0);
     let (btn_x, btn_y, btn_w, btn_h) = match (rect.position, rect.size) {
         (tauri::Position::Physical(p), tauri::Size::Physical(s)) => {
             (p.x as f64, p.y as f64, s.width as f64, s.height as f64)
         }
-        (tauri::Position::Logical(p), tauri::Size::Logical(s)) => (p.x, p.y, s.width, s.height),
+        (tauri::Position::Logical(p), tauri::Size::Logical(s)) => (
+            p.x * scale0,
+            p.y * scale0,
+            s.width * scale0,
+            s.height * scale0,
+        ),
         _ => return,
     };
-    let scale = w.scale_factor().unwrap_or(1.0);
 
-    // 屏幕边界（物理坐标）
-    let mon = w
-        .current_monitor()
+    // 图标所在显示器（物理坐标）
+    let Some(mon) = w
+        .app_handle()
+        .monitor_from_point(btn_x, btn_y)
         .ok()
         .flatten()
-        .or_else(|| w.primary_monitor().ok().flatten());
-    let (mx, my, mw, mh) = mon
-        .map(|m| {
-            let p = m.position();
-            let s = m.size();
-            (p.x as f64, p.y as f64, s.width as f64, s.height as f64)
-        })
-        .unwrap_or((0.0, 0.0, 2560.0, 1440.0));
+        .or_else(|| w.primary_monitor().ok().flatten())
+    else {
+        return;
+    };
+    let mp = mon.position();
+    let ms = mon.size();
+    let (mx, my, mw, mh) = (
+        mp.x as f64,
+        mp.y as f64,
+        ms.width as f64,
+        ms.height as f64,
+    );
+
+    // 第一步：窗口扔到目标显示器中心（落位后 scale_factor 才是该显示器的）
+    let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+        x: (mx + mw / 2.0) as i32,
+        y: (my + mh / 2.0) as i32,
+    }));
+    let scale = w.scale_factor().unwrap_or(scale0);
+    // 面板实际物理尺寸（用户可能拖过大小）
+    let (panel_w, panel_h) = w
+        .outer_size()
+        .map(|s| (s.width as f64, s.height as f64))
+        .unwrap_or((400.0 * scale, 720.0 * scale));
 
     let margin = 10.0;
     let gap = 6.0;
-    // 面板逻辑 400×720 → 物理尺寸
-    let panel_w = 400.0 * scale;
-    let panel_h = 720.0 * scale;
 
     let mut x = btn_x + btn_w / 2.0 - panel_w / 2.0;
     x = x.max(mx + margin).min(mx + mw - panel_w - margin);
@@ -182,18 +206,38 @@ fn position_panel_at(w: &tauri::WebviewWindow, rect: &tauri::Rect) {
     }));
 }
 
+// 实测：macOS 上一次物理点击会投递两个 Click(Up) 事件 → 面板开了立刻被关。
+// 防抖：400ms 内的重复 Click(Up) 直接忽略。
+static LAST_TOGGLE_MS: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+// 面板打开时刻：打开序列自身会产生一次伪 Focused(false)，800ms 内的失焦不收起
+static PANEL_OPENED_MS: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 /// 左键点托盘图标：面板已显示就关掉，否则定位并弹出（CatPaw toggle 语义）
 fn toggle_panel_at(app: &tauri::AppHandle, rect: &tauri::Rect) {
+    let t = now_ms();
+    let prev = LAST_TOGGLE_MS.swap(t, std::sync::atomic::Ordering::SeqCst);
+    if t - prev < 400 {
+        return;
+    }
     let Some(w) = app.get_webview_window("main") else { return };
     match w.is_visible() {
         Ok(true) => {
             let _ = w.hide();
         }
         _ => {
-            position_panel_at(&w, rect);
+            PANEL_OPENED_MS.store(t, std::sync::atomic::Ordering::SeqCst);
+            // 先显示+聚焦（窗口落位到目标显示器后才能拿到真实尺寸/缩放），再定位
             let _ = w.show();
             let _ = w.unminimize();
             let _ = w.set_focus();
+            position_panel_at(&w, rect);
             // 打开时触发一次数据刷新（sync 有单飞锁，不会堆积）
             spawn_sync();
         }
@@ -330,8 +374,11 @@ fn main() {
                     api.prevent_close();
                 }
                 // 面板失焦 = 自动收起（CatPaw 式：点面板外任意处即关）
+                // 打开后 800ms 内的失焦是打开序列的伪事件，忽略
                 tauri::WindowEvent::Focused(false) if window.label() == "main" => {
-                    let _ = window.hide();
+                    if now_ms() - PANEL_OPENED_MS.load(std::sync::atomic::Ordering::SeqCst) > 800 {
+                        let _ = window.hide();
+                    }
                 }
                 _ => {}
             }
@@ -342,6 +389,14 @@ fn main() {
             // 启动参数 --open-dashboard：直接打开看板窗口（验证/调试用）
             if std::env::args().any(|a| a == "--open-dashboard") {
                 open_dashboard_impl(app);
+            }
+            // 启动参数 --test-panel：用托盘自身的 rect 开面板（不依赖外部点击注入）
+            if std::env::args().any(|a| a == "--test-panel") {
+                if let Some(tray) = app.tray_by_id("main") {
+                    if let Ok(Some(rect)) = tray.rect() {
+                        toggle_panel_at(app, &rect);
+                    }
+                }
             }
         });
 }

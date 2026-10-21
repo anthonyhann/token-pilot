@@ -6,8 +6,7 @@
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "frontendDist": "../src",
-    "devUrl": "http://127.0.0.1:8765"
+    "frontendDist": "../src"
   },
   "app": {
     "withGlobalTauri": true,
@@ -17,7 +16,10 @@
         "title": "Token Pilot",
         "width": 400,
         "height": 720,
-        "resizable": false,
+        "resizable": true,
+        "minWidth": 360,
+        "minHeight": 520,
+        "maxWidth": 640,
         "alwaysOnTop": true,
         "decorations": false,
         "visible": false,
