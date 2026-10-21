@@ -28,7 +28,7 @@ token-pilot · 今天
 - **预算控制**：设月度预算，快超了系统通知弹你
 - **打转检测**：揪出"死循环/反复重试"的会话——那些被 Agent 白烧钱还不出活的坑
 - **省钱建议**：识别"贵模型干轻活"、低缓存命中的会话，告诉你每月/每周能省多少
-- **菜单栏**：macOS + Windows 托盘常驻，今日金额+预算进度一抬头就看到
+- **菜单栏**：macOS + Windows 状态栏常驻，今日金额+预算进度一抬头就看到；左键点图标弹出本地面板（失焦自动收起），面板里一键打开完整看板，右键出菜单
 
 ## 快速开始
 
@@ -38,10 +38,26 @@ npm install -g token-pilot    # 或 npx token-pilot today
 token-pilot today             # 今天的账单
 token-pilot month             # 本月 + 月底预测 + 打转检测 + 省钱建议
 token-pilot report            # 完整报告
-token-pilot serve             # 本地看板 http://127.0.0.1:17895（实时刷新）
+token-pilot serve             # 本地看板 http://127.0.0.1:17895（实时刷新，可选）
 token-pilot dash              # 生成静态看板 ~/.token-pilot/dashboard.html
-token-pilot sync              # 只刷新数据文件 ~/.token-pilot/dashboard-data.json
+token-pilot sync              # 只刷新数据文件（增量缓存，热跑 <1s）
 ```
+
+### 状态栏应用（macOS / Windows）
+
+```bash
+cd menubar
+npm install
+npx tauri build        # 产出 .app / .msi 安装包
+```
+
+安装启动后**只在状态栏显示一个图标**（无 Dock 图标、无启动窗口）：
+- 左键图标 → 本地面板在图标下方弹出，点别处自动收起
+- 面板底部「打开完整看板」→ 原生看板窗口（自带数据，不需要 serve）
+- 右键图标 → 菜单（打开面板 / 打开看板 / 退出）
+- 数据每 60s 自动刷新（磁盘增量缓存 + 单飞锁，不会堆积拖慢机器）
+
+> 芯片说明：macOS 在 Apple Silicon 上构建即 arm64 原生；要兼容 Intel Mac 用 `--target universal-apple-darwin`；Windows 出 x64 .msi（建议 GitHub Actions 交叉构建）。
 
 设预算（超了会弹系统通知）：
 
