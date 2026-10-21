@@ -3,5 +3,6 @@ dist/
 *.log
 .DS_Store
 menubar/src-tauri/target/
-docs/
-!docs/assets
+# docs/plan 等内部文档不进仓库；docs/assets（README 引用的图）必须进
+docs/*
+!docs/assets/

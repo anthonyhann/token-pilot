@@ -117,7 +117,7 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 - [ ] 云端用量 API 接入：Doubao 火山（arkcli usage）/ OpenAI / Kimi 开放平台
 
 **节流（Step 2）**
-- [ ] token 压缩建议（LLMLingua 路线，事后分析层）
+- [ ] token 压缩建议&压缩功能开发（LLMLingua 路线，事后分析层）
 - [ ] 低价模型路由（本地代理层，可选开启，默认不动你任何配置）
 - [ ] 异常重试自动熔断提醒（已有检测，加主动通知策略）
 
@@ -128,11 +128,6 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 - [ ] Intel Mac 包（universal2）
 - [ ] 自动更新（tauri-updater）
 - [ ] 签名与公证（Apple Developer $99/年，有赞助再开）
-
-**内容**
-- [x] 中英双语 README
-- [ ] 发布 X 首发帖 + YouTube/B站 demo 视频
-- [ ] 周报到 X（可选）
 
 ## English
 
