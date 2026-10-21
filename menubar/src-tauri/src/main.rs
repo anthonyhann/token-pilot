@@ -78,14 +78,24 @@ fn update_tray(tray: &tauri::tray::TrayIcon, item: &MenuItem<Wry>, v: &Value) {
 }
 
 /// detached 方式跑 `token-pilot sync`，找不到命令就忽略
+/// Windows 注意：CreateProcess 不解 PATHEXT，npm 装的 token-pilot 实际是 token-pilot.cmd，
+/// 必须走 cmd /c；macOS/Linux 直接 exec。
 fn spawn_sync() {
-    if let Ok(mut child) = Command::new("token-pilot")
+    #[cfg(target_os = "windows")]
+    let spawned = Command::new("cmd")
+        .args(["/c", "token-pilot", "sync"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    #[cfg(not(target_os = "windows"))]
+    let spawned = Command::new("token-pilot")
         .arg("sync")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .spawn()
-    {
+        .spawn();
+    if let Ok(mut child) = spawned {
         // 后台线程回收子进程，避免僵尸；不阻塞 UI
         std::thread::spawn(move || {
             let _ = child.wait();
@@ -313,15 +323,22 @@ fn main() {
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&title_i, &panel_i, &dash_i, &quit_i])?;
 
+            // 托盘图标分平台：macOS 用单色模板（深浅菜单栏自适应）；
+            // Windows 用彩色版（纯黑闪电在深色任务栏上会隐形），template 语义仅 macOS 有效
+            #[cfg(target_os = "macos")]
             let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
                 .expect("tray icon png");
+            #[cfg(not(target_os = "macos"))]
+            let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-win.png"))
+                .expect("tray icon png");
+            let is_template = cfg!(target_os = "macos");
             let initial_title = data
                 .as_ref()
                 .map(tray_title)
                 .unwrap_or_else(|| "token-pilot".to_string());
             let tray = TrayIconBuilder::with_id("main")
                 .icon(icon)
-                .icon_as_template(true)
+                .icon_as_template(is_template)
                 .menu(&menu)
                 .show_menu_on_left_click(false) // 左键给面板，菜单只走右键
                 .tooltip(&initial_title)

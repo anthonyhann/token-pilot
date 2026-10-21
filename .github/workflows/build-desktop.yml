@@ -1,0 +1,63 @@
+# token-pilot 状态栏应用 — Windows / macOS 构建
+# 触发：打 v* tag 或手动 dispatch。产出 .msi（Windows x64）与 .dmg（macOS arm64 + Intel）。
+
+name: build-desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: menubar
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Windows 交叉/本机构建 token-pilot CLI 依赖 node 全局安装由用户侧 npm link 提供；
+      # 桌面应用本身只依赖 Rust 工具链。
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            menubar/src-tauri/target
+          key: ${{ matrix.os }}-${{ matrix.target }}-cargo-${{ hashFiles('menubar/src-tauri/Cargo.lock') }}
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Build bundles
+        run: cargo tauri build --target ${{ matrix.target }}
+        working-directory: menubar
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: token-pilot-${{ matrix.target }}
+          path: |
+            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
+          if-no-files-found: ignore

@@ -127,3 +127,27 @@ if bbox:
     timg = canvas.resize((44, 44), Image.LANCZOS)
 timg.save(os.path.join(OUT, 'tray.png'))
 print('tray.png', timg.size)
+
+# ============ Windows 托盘图标（彩色——黑闪电在 Windows 深色任务栏上会隐形） ============
+WS = 64
+WW = WS * SS
+wimg = Image.new('RGBA', (WW, WW), (0, 0, 0, 0))
+# 外发光描边（深橙描边保证浅色任务栏也看得清）
+wpoly = bolt_poly(WW/2, WW/2, WW*0.56, WW*0.78)
+gloww = Image.new('RGBA', (WW, WW), (0,0,0,0))
+ImageDraw.Draw(gloww).polygon(wpoly, fill=(200, 80, 30, 255))
+gloww = gloww.filter(ImageFilter.GaussianBlur(WW*0.02))
+wimg = Image.alpha_composite(wimg, gloww)
+wg, wm, wpos = vgrad(lambda md: md.polygon([(x-0, y-0) for x, y in wpoly], fill=255),
+                     (0, 0, WW, WW), (255, 160, 110), C_PINK)
+wimg.paste(wg, wpos, wm)
+wimg = wimg.resize((WS, WS), Image.LANCZOS)
+bbox = wimg.getbbox()
+if bbox:
+    wimg = wimg.crop(bbox)
+    side = int(max(wimg.width, wimg.height) * 1.08)
+    canvas = Image.new('RGBA', (side, side), (0,0,0,0))
+    canvas.paste(wimg, ((side-wimg.width)//2, (side-wimg.height)//2), wimg)
+    wimg = canvas.resize((32, 32), Image.LANCZOS)
+wimg.save(os.path.join(OUT, 'tray-win.png'))
+print('tray-win.png', wimg.size)
