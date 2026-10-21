@@ -19,7 +19,9 @@
         "height": 720,
         "resizable": false,
         "alwaysOnTop": true,
-        "decorations": false
+        "decorations": false,
+        "visible": false,
+        "skipTaskbar": true
       },
       {
         "label": "dashboard",

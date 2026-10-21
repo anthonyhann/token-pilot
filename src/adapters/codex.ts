@@ -80,6 +80,30 @@ function parseLine(line: string, file: string, lineNo: number): UsageEvent | nul
   };
 }
 
+async function readFileEvents(file: string, sinceMs = 0): Promise<UsageEvent[]> {
+  let content: string;
+  try {
+    content = await fs.readFile(file, 'utf8');
+  } catch {
+    return [];
+  }
+  const events: UsageEvent[] = [];
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const ev = parseLine(line, file, i);
+    if (ev && ev.timestamp >= sinceMs) events.push(ev);
+  }
+  return events;
+}
+
+async function listFiles(): Promise<string[]> {
+  const out: string[] = [];
+  for await (const f of walkJsonl(SESSIONS_DIR)) out.push(f);
+  return out;
+}
+
 export const codexAdapter: Adapter = {
   meta: {
     id: 'codex',
@@ -95,28 +119,18 @@ export const codexAdapter: Adapter = {
       return false;
     }
   },
+  listFiles,
+  readFileEvents,
   async readEvents(sinceMs = 0): Promise<UsageEvent[]> {
     const events: UsageEvent[] = [];
-    for await (const file of walkJsonl(SESSIONS_DIR)) {
+    for (const file of await listFiles()) {
       try {
         const st = await fs.stat(file);
         if (st.mtimeMs < sinceMs) continue;
       } catch {
         continue;
       }
-      let content: string;
-      try {
-        content = await fs.readFile(file, 'utf8');
-      } catch {
-        continue;
-      }
-      const lines = content.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.trim()) continue;
-        const ev = parseLine(line, file, i);
-        if (ev && ev.timestamp >= sinceMs) events.push(ev);
-      }
+      events.push(...(await readFileEvents(file, sinceMs)));
     }
     return events;
   },

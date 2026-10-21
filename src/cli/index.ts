@@ -2,15 +2,16 @@
 // token-pilot CLI — 多宿主聚合
 // 命令：today | month | report | sync | dash | serve
 
-import { costOf } from '../core/pricing.ts';
+import { costOf, loadPricingWithOverrides } from '../core/pricing.ts';
 import { progressBar } from '../core/budget.ts';
 import { detectRetryLoops } from '../core/retry-detector.ts';
 import { savingsAdvice } from '../core/savings.ts';
 import { notify } from '../core/alert.ts';
 import { loadConfig, fxRate, monthlyBudgetCny } from '../core/config.ts';
 import { writeSummary } from '../core/metrics.ts';
-import { collectAll, Collector } from '../core/collector.ts';
-import { serve, bakeDashboard, refreshOnce, type ServeState } from './serve.ts';
+import { collectAll, collectCached, acquireSyncLock, releaseSyncLock } from '../core/collector.ts';
+import { buildDashboardData } from '../core/aggregate.ts';
+import { serve, bakeDashboard, writeDashboardDataFile } from './serve.ts';
 import type { UsageEvent } from '../core/schema.ts';
 
 function startOfToday(): number {
@@ -142,10 +143,22 @@ async function cmdReport(cmd: string) {
 }
 
 async function cmdSync(): Promise<void> {
-  const state: ServeState = { collector: new Collector(), data: null, refreshing: false, lastAlertPct: 0 };
-  const data = await refreshOnce(state);
-  console.log(`token-pilot sync · 已写 ~/.token-pilot/dashboard-data.json`);
-  console.log(`今日：¥${data.hero.today.costCny.toFixed(2)} · ${data.hero.today.calls} 次调用 · 托盘：${data.trayTitle}`);
+  // 单飞：已有 sync 在跑直接退出（菜单栏 60s 定时器叠加 spawn 也不会堆积）
+  if (!(await acquireSyncLock())) {
+    console.log('已有 sync 在运行，跳过');
+    return;
+  }
+  try {
+    const cfg = loadConfig();
+    const pricing = loadPricingWithOverrides(cfg.priceOverrides, fxRate(cfg));
+    const { events, detected, parsedFiles, cachedFiles } = await collectCached(0);
+    const data = await buildDashboardData(events, cfg, pricing);
+    writeDashboardDataFile(data);
+    console.log(`token-pilot sync · ${detected.length} 宿主 · 解析 ${parsedFiles} 文件 / 缓存命中 ${cachedFiles}`);
+    console.log(`今日：¥${data.hero.today.costCny.toFixed(2)} · ${data.hero.today.calls} 次调用 · 托盘：${data.trayTitle}`);
+  } finally {
+    await releaseSyncLock();
+  }
 }
 
 async function cmdDash(): Promise<void> {

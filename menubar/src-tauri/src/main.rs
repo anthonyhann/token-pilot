@@ -133,6 +133,73 @@ fn open_dashboard_impl(app: &tauri::AppHandle) {
     let _ = open::that("http://127.0.0.1:17895");
 }
 
+/// 把面板定位到托盘图标下方（CatPaw 式 dropdown）；
+/// 空间不够就翻到图标上方（Windows 底栏场景），左右贴边时收进屏幕。
+fn position_panel_at(w: &tauri::WebviewWindow, rect: &tauri::Rect) {
+    let (btn_x, btn_y, btn_w, btn_h) = match (rect.position, rect.size) {
+        (tauri::Position::Physical(p), tauri::Size::Physical(s)) => {
+            (p.x as f64, p.y as f64, s.width as f64, s.height as f64)
+        }
+        (tauri::Position::Logical(p), tauri::Size::Logical(s)) => (p.x, p.y, s.width, s.height),
+        _ => return,
+    };
+    let scale = w.scale_factor().unwrap_or(1.0);
+
+    // 屏幕边界（物理坐标）
+    let mon = w
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| w.primary_monitor().ok().flatten());
+    let (mx, my, mw, mh) = mon
+        .map(|m| {
+            let p = m.position();
+            let s = m.size();
+            (p.x as f64, p.y as f64, s.width as f64, s.height as f64)
+        })
+        .unwrap_or((0.0, 0.0, 2560.0, 1440.0));
+
+    let margin = 10.0;
+    let gap = 6.0;
+    // 面板逻辑 400×720 → 物理尺寸
+    let panel_w = 400.0 * scale;
+    let panel_h = 720.0 * scale;
+
+    let mut x = btn_x + btn_w / 2.0 - panel_w / 2.0;
+    x = x.max(mx + margin).min(mx + mw - panel_w - margin);
+
+    let mut y = btn_y + btn_h + gap;
+    if y + panel_h > my + mh - margin {
+        y = btn_y - panel_h - gap; // 下方放不下 → 翻到上方
+    }
+    if y < my + margin {
+        y = my + margin;
+    }
+
+    let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+        x: x as i32,
+        y: y as i32,
+    }));
+}
+
+/// 左键点托盘图标：面板已显示就关掉，否则定位并弹出（CatPaw toggle 语义）
+fn toggle_panel_at(app: &tauri::AppHandle, rect: &tauri::Rect) {
+    let Some(w) = app.get_webview_window("main") else { return };
+    match w.is_visible() {
+        Ok(true) => {
+            let _ = w.hide();
+        }
+        _ => {
+            position_panel_at(&w, rect);
+            let _ = w.show();
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+            // 打开时触发一次数据刷新（sync 有单飞锁，不会堆积）
+            spawn_sync();
+        }
+    }
+}
+
 fn show_panel(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -185,9 +252,13 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![get_data, hide_panel, open_dashboard, save_config])
         .setup(|app| {
+            // macOS：Accessory 模式 = 无 Dock 图标、无菜单栏应用菜单，纯状态栏驻留
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let data = read_data();
 
-            // 托盘菜单：今日金额 · 预算 / 打开面板 / 打开看板 / 退出
+            // 托盘菜单（右键）：今日金额 · 预算 / 打开面板 / 打开看板 / 退出
             let title_txt = data
                 .as_ref()
                 .map(menu_label)
@@ -208,6 +279,7 @@ fn main() {
                 .icon(icon)
                 .icon_as_template(true)
                 .menu(&menu)
+                .show_menu_on_left_click(false) // 左键给面板，菜单只走右键
                 .tooltip(&initial_title)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => app.exit(0),
@@ -216,22 +288,15 @@ fn main() {
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    // 左键点击托盘图标 → 面板显示/隐藏
+                    // 左键点击托盘图标 → 面板在图标下方弹出/收起（CatPaw 式）
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
+                        rect,
                         ..
                     } = event
                     {
-                        let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
-                            match w.is_visible() {
-                                Ok(true) => {
-                                    let _ = w.hide();
-                                }
-                                _ => show_panel(app),
-                            }
-                        }
+                        toggle_panel_at(tray.app_handle(), &rect);
                     }
                 })
                 .build(app)?;
@@ -258,10 +323,17 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 关窗 = 隐藏，保持托盘常驻可再打开
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let _ = window.hide();
-                api.prevent_close();
+            match event {
+                // 关窗 = 隐藏，保持托盘常驻可再打开
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+                // 面板失焦 = 自动收起（CatPaw 式：点面板外任意处即关）
+                tauri::WindowEvent::Focused(false) if window.label() == "main" => {
+                    let _ = window.hide();
+                }
+                _ => {}
             }
         })
         .build(tauri::generate_context!())

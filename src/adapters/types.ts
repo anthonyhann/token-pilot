@@ -20,6 +20,10 @@ export interface Adapter {
   // 读取指定日期范围（含当天到现在的所有事件）
   // sinceMs: 起始时间戳（unix ms），不传 = 全部
   readEvents(sinceMs?: number): Promise<UsageEvent[]>;
+
+  // 文件级能力（磁盘增量缓存用，可选）：
+  listFiles?(): Promise<string[]>;                                       // 全部日志文件路径
+  readFileEvents?(file: string, sinceMs?: number): Promise<UsageEvent[]>; // 解析单文件
 }
 
 // 注册表

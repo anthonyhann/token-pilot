@@ -123,6 +123,45 @@ function grabTitle(line: string, out: Map<string, string>): void {
   }
 }
 
+// 解析单个 jsonl 文件：文件内按 message.id 去重（取 totalTokens 最大），附会话标题
+async function readFileEvents(file: string, sinceMs = 0): Promise<UsageEvent[]> {
+  let content: string;
+  try {
+    content = await fs.readFile(file, 'utf8');
+  } catch {
+    return [];
+  }
+  const byId = new Map<string, UsageEvent>();
+  const titleBySession = new Map<string, string>();
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    // 顺手抓会话标题（首条用户文本消息），成本只是一次子串判断
+    if (line.includes('"type":"user"') && line.includes('"content"')) {
+      grabTitle(line, titleBySession);
+    }
+    const ev = parseLine(line, file, i);
+    if (!ev || ev.timestamp < sinceMs) continue;
+    const prev = byId.get(ev.eventId);
+    if (!prev || ev.usage.totalTokens > prev.usage.totalTokens) {
+      byId.set(ev.eventId, ev);
+    }
+  }
+  const events = [...byId.values()];
+  for (const ev of events) {
+    const t = titleBySession.get(ev.sessionId);
+    if (t) ev.sessionTitle = t;
+  }
+  return events;
+}
+
+async function listFiles(): Promise<string[]> {
+  const out: string[] = [];
+  for await (const f of walkJsonl(PROJECTS_DIR)) out.push(f);
+  return out;
+}
+
 export const claudeCodeAdapter: Adapter = {
   meta: {
     id: 'claude-code',
@@ -140,12 +179,13 @@ export const claudeCodeAdapter: Adapter = {
     }
   },
 
+  listFiles,
+  readFileEvents,
+
   async readEvents(sinceMs = 0): Promise<UsageEvent[]> {
-    // 同一 message.id 会写出多行流式快照（前几行 usage 全零，末行才是真实值）。
-    // 去重策略：按 eventId 分组，保留 totalTokens 最大的一条（ccusage 语义）。
-    const byId = new Map<string, UsageEvent>();
-    const titleBySession = new Map<string, string>();
-    for await (const file of walkJsonl(PROJECTS_DIR)) {
+    // 同一 message.id 只可能出现在一个会话文件里，按文件合并即可
+    const events: UsageEvent[] = [];
+    for (const file of await listFiles()) {
       // 文件 mtime 早于 since 就整个跳过（快计算）
       try {
         const st = await fs.stat(file);
@@ -153,32 +193,7 @@ export const claudeCodeAdapter: Adapter = {
       } catch {
         continue;
       }
-      let content: string;
-      try {
-        content = await fs.readFile(file, 'utf8');
-      } catch {
-        continue;
-      }
-      const lines = content.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.trim()) continue;
-        // 顺手抓会话标题（首条用户文本消息），成本只是一次子串判断
-        if (line.includes('"type":"user"') && line.includes('"content"')) {
-          grabTitle(line, titleBySession);
-        }
-        const ev = parseLine(line, file, i);
-        if (!ev || ev.timestamp < sinceMs) continue;
-        const prev = byId.get(ev.eventId);
-        if (!prev || ev.usage.totalTokens > prev.usage.totalTokens) {
-          byId.set(ev.eventId, ev);
-        }
-      }
-    }
-    const events = [...byId.values()];
-    for (const ev of events) {
-      const t = titleBySession.get(ev.sessionId);
-      if (t) ev.sessionTitle = t;
+      events.push(...(await readFileEvents(file, sinceMs)));
     }
     return events;
   },
