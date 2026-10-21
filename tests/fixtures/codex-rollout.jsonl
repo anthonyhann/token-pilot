@@ -1,0 +1,5 @@
+// codex fixture：token_usage_record；input_tokens 含 cached_input_tokens 子集
+// 期望产出：2 个事件；第一个 input=56369-5760=50609
+{"timestamp":"2026-10-09T18:28:10.000Z","type":"token_usage_record","payload":{"session_id":"codex-fixture-1","usage":{"input_tokens":56369,"cached_input_tokens":5760,"cache_write_input_tokens":0,"output_tokens":956,"total_tokens":57325}}}
+{"timestamp":"2026-10-09T18:28:20.000Z","type":"response_item","payload":{"session_id":"codex-fixture-1"}}
+{"timestamp":"2026-10-09T18:29:00.000Z","type":"token_usage_record","payload":{"session_id":"codex-fixture-1","usage":{"input_tokens":67119,"cached_input_tokens":56192,"cache_write_input_tokens":0,"output_tokens":429,"total_tokens":67548}}}

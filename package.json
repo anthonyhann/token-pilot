@@ -10,7 +10,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "today": "node --experimental-strip-types src/cli/index.ts today",
-    "test": "node --test"
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "engines": {
     "node": ">=18"

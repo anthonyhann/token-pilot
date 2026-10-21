@@ -1,0 +1,9 @@
+// claude-code fixture：同一 message.id 的流式快照（前 2 行全零，末行真实值）
+// + 一条 <synthetic>（应过滤）+ 一条无 usage（应过滤）+ 用户消息（抓标题）
+// 期望产出：1 个事件（output 4263），sessionTitle='修复登录页样式'
+{"type":"user","sessionId":"sess-fixture-1","timestamp":"2026-10-20T08:00:00.000Z","cwd":"/Users/test/myproj","message":{"content":"修复登录页样式"}}
+{"type":"assistant","sessionId":"sess-fixture-1","timestamp":"2026-10-20T08:00:05.000Z","cwd":"/Users/test/myproj","message":{"id":"msg-dup-1","model":"claude-sonnet-4-6","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"sess-fixture-1","timestamp":"2026-10-20T08:00:08.000Z","cwd":"/Users/test/myproj","message":{"id":"msg-dup-1","model":"claude-sonnet-4-6","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"sess-fixture-1","timestamp":"2026-10-20T08:00:12.000Z","cwd":"/Users/test/myproj","message":{"id":"msg-dup-1","model":"claude-sonnet-4-6","usage":{"input_tokens":239,"output_tokens":4263,"cache_read_input_tokens":93760,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"sess-fixture-1","timestamp":"2026-10-20T08:00:20.000Z","message":{"id":"msg-syn","model":"<synthetic>","usage":{"input_tokens":1,"output_tokens":1}}}
+{"type":"summary","sessionId":"sess-fixture-1","timestamp":"2026-10-20T08:00:30.000Z"}

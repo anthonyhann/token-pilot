@@ -155,7 +155,7 @@ export async function bakeDashboard(): Promise<string> {
   const html = readWebAsset('dashboard.html');
   if (!html) throw new Error('web/dashboard.html 不存在');
   const out = path.join(CONFIG_DIR, 'dashboard.html');
-  writeFileSync(injectData(html, data), 'utf8');
+  writeFileSync(out, injectData(html, data), 'utf8');
   return out;
 }
 

@@ -1,111 +1,133 @@
+<div align="center">
+
+<img src="docs/assets/icon.png" width="96" alt="token-pilot logo">
+
 # token-pilot
 
-> **你所有 AI 工具的本地账单 + 预算控制器。**
-> 只读本地日志，零入侵，数据不出本机。
+**你所有 AI 工具的本地账单 + 预算控制器**
 
-我同时用 Claude Code、Codex、Kimi Code，还经常通过它们跑 DeepSeek、GLM 等国产模型。有一天我发现：**我根本答不上来"我这个月给 AI 烧了多少钱"。** 每个工具有自己的用量页，分散、单位不一、没有总账，更没有预算。
+只读本地日志 · 零入侵 · 数据不出本机
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](#状态栏应用)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-339933)](#快速开始)
+[![Tests](https://img.shields.io/badge/tests-22%20passing-brightgreen)](#数据准确性)
+
+</div>
+
+---
+
+我同时用 Claude Code、Codex、Kimi Code，还经常通过它们跑 DeepSeek、GLM 等国产模型。有一天我发现：**我根本答不上来「我这个月给 AI 烧了多少钱」。** 每个工具有自己的用量页，分散、单位不一、没有总账，更没有预算。
 
 所以有了 token-pilot。
 
-```bash
-$ token-pilot today
+## 长什么样
 
-token-pilot · 今天
+| 状态栏面板（macOS / Windows） | 完整看板 |
+|---|---|
+| ![状态栏面板](docs/assets/menubar-panel.png) | ![完整看板](docs/assets/dashboard.png) |
 
-按宿主：
-  claude-code       12.85M tokens     $6.41      248 次
-  kimi-code         ...
-
-合计：12.85M tokens · $6.41 · 248 次调用
-```
-
-> 数字准到什么程度？仓库自带独立对账脚本 `scripts/reconcile.py`（不复用采集代码、第三方视角重算原始日志），月/日 tokens 与调用数逐项相等。
+安装后只在状态栏显示一个闪电图标（无 Dock 图标、无启动窗口）。左键点开面板看今天，「打开完整看板」看全部。
 
 ## 它能做什么
 
 - **本地账单**：一条命令看清今天/本月各工具、各模型烧了多少 token、多少钱
-- **本地看板**：`token-pilot serve` 起本地看板（花费趋势、构成环图、实时流速、活跃会话、省钱建议、适配器状态），10 秒自刷新，数据不出本机
-- **预算控制**：设月度预算，快超了系统通知弹你
-- **打转检测**：揪出"死循环/反复重试"的会话——那些被 Agent 白烧钱还不出活的坑
-- **省钱建议**：识别"贵模型干轻活"、低缓存命中的会话，告诉你每月/每周能省多少
-- **菜单栏**：macOS + Windows 状态栏常驻，今日金额+预算进度一抬头就看到；左键点图标弹出本地面板（失焦自动收起），面板里一键打开完整看板，右键出菜单
+- **实时流速**：当前 tok/s、峰值、读入上下文速率、哪些会话正在输出
+- **预算控制**：设月度预算，快超了系统通知弹你；托盘常驻 `¥今日 · 预算%`
+- **打转检测**：揪出死循环/反复重试的会话——那些被 Agent 白烧钱还不出活的坑
+- **省钱建议**：贵模型干轻活 → 建议换便宜模型并算出每月能省多少；低缓存命中会话的优化空间；缓存本月帮你省了多少
+- **国产模型自动归一**：用 Claude Code / Kimi Code 跑 DeepSeek、GLM、Kimi，用量已经在宿主日志里，按 model 字段自动算，不用单独配置
 
 ## 快速开始
 
-```bash
-npm install -g token-pilot    # 或 npx token-pilot today
+### CLI（30 秒）
 
-token-pilot today             # 今天的账单
-token-pilot month             # 本月 + 月底预测 + 打转检测 + 省钱建议
-token-pilot report            # 完整报告
-token-pilot serve             # 本地看板 http://127.0.0.1:17895（实时刷新，可选）
-token-pilot dash              # 生成静态看板 ~/.token-pilot/dashboard.html
-token-pilot sync              # 只刷新数据文件（增量缓存，热跑 <1s）
+```bash
+npm install -g token-pilot
+
+token-pilot today    # 今天的账单
+token-pilot month    # 本月 + 月底预测 + 打转检测 + 省钱建议
+token-pilot serve    # 本地看板 http://127.0.0.1:17895（可选，10s 自刷新）
 ```
 
-### 状态栏应用（macOS / Windows）
+设预算（超了弹系统通知）：
 
 ```bash
-cd menubar
-npm install
-npx tauri build        # 产出 .app / .msi 安装包
-```
-
-安装启动后**只在状态栏显示一个图标**（无 Dock 图标、无启动窗口）：
-- 左键图标 → 本地面板在图标下方弹出，点别处自动收起
-- 面板底部「打开完整看板」→ 原生看板窗口（自带数据，不需要 serve）
-- 右键图标 → 菜单（打开面板 / 打开看板 / 退出）
-- 数据每 60s 自动刷新（磁盘增量缓存 + 单飞锁，不会堆积拖慢机器）
-
-> 芯片说明：macOS 在 Apple Silicon 上构建即 arm64 原生；要兼容 Intel Mac 用 `--target universal-apple-darwin`；Windows 出 x64 .msi（建议 GitHub Actions 交叉构建）。
-
-设预算（超了会弹系统通知）：
-
-```bash
-mkdir -p ~/.token-pilot
 echo '{"monthlyBudgetCny": 1500}' > ~/.token-pilot/config.json
 ```
 
-也可以在看板右上角「数据设置」里直接改：模型单价、云端 API 月费、订阅月费、月度预算。
+### 状态栏应用
+
+[Releases](../../releases) 下载 `token-pilot_x.x.x_aarch64.dmg`（macOS Apple Silicon）或 `.msi`（Windows x64），安装即用。
+
+> 未签名：macOS 首次打开需右键 → 打开；Windows SmartScreen 选「仍要运行」。
+
+自己构建：
+
+```bash
+cd menubar && npm install && npx tauri build
+```
 
 ## 支持的工具
 
-token-pilot 按"数据深度"分档覆盖，**不假装都能读**：
+按「数据深度」分档覆盖，**不假装都能读**：
 
 | 档 | 工具 | 数据深度 |
 |---|---|---|
-| 本地日志直读 | Claude Code / Codex / Kimi Code / pi | 全量 token + 模型 |
-| 本地 SQLite 直读 | OpenCode / Cursor | token |
-| 国产模型归一 | DeepSeek / GLM / Kimi / Qwen / MiniMax / 混元 / MiMo / LongCat / Doubao | 靠宿主日志的 model 字段 + 定价表 |
-| 云端用量 API | Doubao(火山) / OpenAI API / Moonshot | 各厂 usage API |
-| 仅检测 | Antigravity / Augment / CodeBuddy / Copilot / Kilo / Qwen Code / Trae / Windsurf / ZCode / Hermes / Cline | 检测到已安装，但该工具不写本地用量日志 |
-| 桌面端（订阅制） | Kimi.app / ChatGPT.app 等 | 记固定订阅成本（它们不按 token 计费） |
+| 本地日志直读 | Claude Code / Codex / Kimi Code | 全量 token + 模型 + 会话 |
+| 本地 SQLite 直读 | OpenCode / Cursor | 开发中 |
+| 国产模型归一 | DeepSeek / GLM / Kimi / Qwen / MiniMax / 混元 / MiMo / LongCat / Doubao | 宿主日志 model 字段 + 定价表 |
+| 云端用量 API | Doubao(火山) / OpenAI API / Moonshot | 登记月费 |
+| 仅检测 | Antigravity / Augment / CodeBuddy / Copilot / Kilo / Qwen Code / Trae / Windsurf / ZCode / Hermes / Cline | 不写本地用量日志 |
+| 桌面端（订阅制） | Kimi.app / ChatGPT.app 等 | 记固定订阅成本 |
 
-**国产模型不用单独配置**——你用 Claude Code / Kimi Code 跑 DeepSeek、GLM，用量已经在宿主日志里，token-pilot 按 model 归一自动算。
+## 数据准确性
+
+账单工具不准就是误导。token-pilot 的准确性是**可验证**的：
+
+```bash
+python3 scripts/reconcile.py month    # 第三方视角独立重算原始日志，与 CLI 逐项对账
+python3 scripts/verify-dashboard.py   # 看板 36 项算法不变量校验
+npm test                              # 22 个单元测试（定价/采集口径/聚合/注入）
+```
+
+实测口径修复证据：流式快照去重（某会话 169 行 → 79 唯一调用）、缓存 token 不重复计费（codex `input` 含 `cached` 子集 / kimi `inputOther` 才是新输入）。
 
 ## 设计原则
 
-- **少采集**：只读本地日志，不注入 hook、不改你的配置；流式快照按 message.id 去重，缓存 token 不重复计费
-- **快计算**：本地解析，秒出结果；增量采集（mtime 快跳）
-- **低成本**：零依赖、零后台常驻（除非你开菜单栏/serve）
-- **本地化**：数据不出本机，没有任何遥测上传
-- **能提醒**：预算快超了系统通知
-- **能节流**：打转检测 + 省钱建议，帮你不被 Agent 白烧
-- **可验证**：`python3 scripts/reconcile.py` 独立重算原始日志，与 CLI 输出逐项对账
+**少采集 · 快计算 · 低成本 · 本地化 · 能提醒 · 能节流**
 
-## 技术说明
+- 只读日志，不注入 hook、不改你的配置、没有遥测上传
+- 磁盘增量缓存：热刷新 < 0.5s；单飞锁防进程堆积
+- 零依赖、零后台常驻（serve / 状态栏应用除外）
 
-- 采集层：声明式 adapter（一个工具一个文件），读本地 jsonl/SQLite
-- 成本层：`pricing/models.json` 定价表（含国产模型 cacheRead 目录价），接受社区 PR 修正
-- 归一层：schema 对齐 LoongSuite Pilot 的 `gen_ai.usage.*` 语义约定（它预留了 cost 字段没填，我们填上）
-- 看板层：`src/core/contract.ts` 定义 DashboardData 契约 → `aggregate.ts` 单遍聚合 → `serve`（localhost HTTP，设置弹窗可写回配置）或 `dash`（静态 bake）两种形态；web/dashboard.html 与 web/panel.html 共用一份契约
-- 菜单栏：Tauri（Rust 壳 + TrayIcon + 面板窗口），macOS/Windows 同码，60s 自动刷新托盘标题
+## 架构
 
-> 参考蓝本：[alibaba/loongsuite-pilot](https://github.com/alibaba/loongsuite-pilot)（架构思想）、[ryoppippi/ccusage](https://github.com/ryoppippi/ccusage)（只读日志路线）。token-pilot works standalone, supercharges with LoongSuite Pilot.
+```
+本地日志 ──▶ adapter（声明式，一个工具一个文件）
+         ──▶ 采集器（增量缓存 + 单飞锁）
+         ──▶ 聚合引擎（DashboardData 契约）
+         ──▶ CLI / 本地 serve / Tauri 状态栏应用（macOS+Windows 同码）
+```
 
-## 加一个新工具
+归一 schema 对齐 [LoongSuite Pilot](https://github.com/alibaba/loongsuite-pilot) 的 `gen_ai.usage.*` 语义；采集路线参考 [ccusage](https://github.com/ryoppippi/ccusage)。加一个新工具 = 加一个 adapter 文件，见 [docs/adding-an-adapter.md](docs/adding-an-adapter.md)。
 
-见 [docs/adding-an-adapter.md](docs/adding-an-adapter.md)。一个 adapter 一个文件，社区可直接 PR。
+## 支持这个项目
+
+token-pilot 是我的一人公司实验品之一（ Solo AI Creator ，西安远程）。如果它帮你省下了 AI 账单，可以请我喝杯咖啡：
+
+| 微信赞赏 | 支付宝 |
+|---|---|
+| ![微信赞赏码](docs/assets/sponsor-wechat.png) | ![支付宝赞赏码](docs/assets/sponsor-alipay.png) |
+
+或来 [X @AnthonyHan_](https://x.com/AnthonyHan_) 打个招呼也行。
+
+## Roadmap
+
+- [ ] 更多 adapter：OpenCode（SQLite）/ Qoder（会话数）/ pi
+- [ ] token 压缩建议（LLMLingua 路线）
+- [ ] 低价模型路由（本地代理层，可选）
+- [ ] 周报到 X/公众号（可选）
 
 ## License
 

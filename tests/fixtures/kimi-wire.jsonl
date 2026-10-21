@@ -1,0 +1,6 @@
+// kimi-code fixture：usage.record 才算数；context.append_loop_event / agent.message.appended 带 usage 字样但不是计费记录
+// 期望产出：2 个事件；input 只算 inputOther（不并入缓存）
+{"type":"usage.record","model":"gpt-5.4","usage":{"inputOther":42369,"output":172,"inputCacheRead":0,"inputCacheCreation":0},"time":1791859777047}
+{"type":"context.append_loop_event","time":1791859777077,"usage":null}
+{"type":"agent.message.appended","time":1791859778000,"usage":{"inputOther":999999}}
+{"type":"usage.record","model":"gpt-5.4","usage":{"inputOther":203,"output":320,"inputCacheRead":42240,"inputCacheCreation":0},"time":1791859784180}
