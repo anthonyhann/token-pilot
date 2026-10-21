@@ -89,9 +89,9 @@ npm test                              # 22 个单元测试（定价/采集口径
 
 token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝杯咖啡：
 
-| 支付宝 | 微信（补充中） |
+| 支付宝 | 微信 |
 |---|---|
-| <img src="docs/assets/sponsor-alipay.png" width="260" alt="支付宝赞赏码"> | 待补充 |
+| <img src="docs/assets/sponsor-alipay.png" width="260" alt="支付宝赞赏码"> | <img src="docs/assets/sponsor-wechat.png" width="260" alt="微信赞赏码"> |
 
 也想出现在这里？→ [bmomhan@gmail.com](mailto:bmomhan@gmail.com)（赞助位招租）
 
