@@ -112,7 +112,15 @@ fn dashboard_server_up() -> bool {
     std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
 }
 
-fn open_dashboard_impl() {
+/// 打开完整看板：优先显示内置原生窗口（自带数据，不依赖 serve）；
+/// 窗口不可用时退回浏览器（serve 或静态 bake 文件）。
+fn open_dashboard_impl(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("dashboard") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+        return;
+    }
     if dashboard_server_up() {
         let _ = open::that("http://127.0.0.1:17895");
         return;
@@ -144,14 +152,38 @@ fn hide_panel(window: tauri::WebviewWindow) {
 }
 
 #[tauri::command]
-fn open_dashboard() {
-    open_dashboard_impl();
+fn open_dashboard(app: tauri::AppHandle) {
+    open_dashboard_impl(&app);
+}
+
+/// 设置弹窗写回：把 {monthlyBudgetCny, priceOverrides, cloudApis, subscriptions} 合并进 config.json
+#[tauri::command]
+fn save_config(json: String) -> Result<(), String> {
+    let patch: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    let cfg_path = home_dir().join(".token-pilot").join("config.json");
+    let mut cur: Value = fs::read_to_string(&cfg_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    for k in ["monthlyBudgetCny", "priceOverrides", "cloudApis", "subscriptions"] {
+        if let Some(v) = patch.get(k) {
+            cur[k] = v.clone();
+        }
+    }
+    if let Some(dir) = cfg_path.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    let out = serde_json::to_string_pretty(&cur).map_err(|e| e.to_string())?;
+    fs::write(&cfg_path, out + "\n").map_err(|e| e.to_string())?;
+    // 写完后触发一次 sync，让看板立刻用新配置重算
+    spawn_sync();
+    Ok(())
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![get_data, hide_panel, open_dashboard])
+        .invoke_handler(tauri::generate_handler![get_data, hide_panel, open_dashboard, save_config])
         .setup(|app| {
             let data = read_data();
 
@@ -180,7 +212,7 @@ fn main() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => app.exit(0),
                     "open-panel" => show_panel(app),
-                    "open-dashboard" => open_dashboard_impl(),
+                    "open-dashboard" => open_dashboard_impl(app),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -232,6 +264,12 @@ fn main() {
                 api.prevent_close();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running token-pilot menubar");
+        .build(tauri::generate_context!())
+        .expect("error while building token-pilot menubar")
+        .run(|app, _| {
+            // 启动参数 --open-dashboard：直接打开看板窗口（验证/调试用）
+            if std::env::args().any(|a| a == "--open-dashboard") {
+                open_dashboard_impl(app);
+            }
+        });
 }

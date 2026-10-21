@@ -345,7 +345,7 @@ footer .notes{max-width:560px}
       <span class="date-lab">10月20日 周二</span>
       <span class="bpill num">本月 ¥1,286 / ¥1,500<span class="bbar"><i></i></span></span>
       <button class="btn-ghost" id="settingsBtn" type="button">数据设置</button>
-      <a class="btn-ghost" href="token-pilot-menubar-panel.html">菜单栏面板</a>
+      <a class="btn-ghost" href="/panel" id="panelLink">菜单栏面板</a>
       <button class="theme-btn" id="themeBtn" type="button" aria-label="切换深浅模式"><svg class="moon" viewBox="0 0 24 24"><path d="M20 13.5A8.5 8.5 0 0 1 10.5 4 7.5 7.5 0 1 0 20 13.5z"/></svg><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M4.8 4.8l1.8 1.8M17.4 17.4l1.8 1.8M19.2 4.8l-1.8 1.8M6.6 17.4l-1.8 1.8"/></svg></button>
     </div>
   </header>
@@ -670,10 +670,15 @@ function cnDate(s){var p=String(s||"").split("/");return p.length>1?p[0]+"月"+p
 function p2(x){return (x<10?"0":"")+x}
 
 let D = window.__TP_DATA__ || null;
+function inTauri(){return !!(window.__TAURI__&&window.__TAURI__.core)}
+function fetchData(){
+  if (window.__TP_DATA__) return Promise.resolve(window.__TP_DATA__);
+  if (inTauri()) return window.__TAURI__.core.invoke('get_data').then(function(s){try{return JSON.parse(s)}catch(e){return null}}).catch(function(){return null});
+  return fetch('/api/data', {cache:'no-store'}).then(function(r){return r.ok?r.json():null}).catch(function(){return null});
+}
 async function loadData(){
   if (D) return D;
-  try { const r = await fetch('/api/data', {cache:'no-store'}); if (r.ok) return await r.json(); } catch(e){}
-  return null;
+  return fetchData();
 }
 var FX=7.2;
 
@@ -984,8 +989,15 @@ $("#settingsSave").addEventListener("click",function(){
     h.textContent=msg;h.classList.add("on");
     setTimeout(function(){h.classList.remove("on")},1600);
   }
-  fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){
-    if(!r.ok)throw new Error("bad status");
+  var saved;
+  if (inTauri()) {
+    saved = window.__TAURI__.core.invoke('save_config', {json: JSON.stringify(payload)});
+  } else {
+    saved = fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){
+      if(!r.ok)throw new Error("bad status");
+    });
+  }
+  saved.then(function(){
     showHint("已保存");
   }).catch(function(){
     try{localStorage.setItem("tp-settings",JSON.stringify(payload))}catch(e){}
@@ -1182,17 +1194,15 @@ function renderAll(d){
 }
 async function poll(){
   try{
-    var r=await fetch("/api/data",{cache:"no-store"});
-    if(r.ok){
-      var d=await r.json();
-      if(d&&d.generatedAt!==(D&&D.generatedAt))renderAll(d);
-    }
+    var d=await fetchData();
+    if(d&&d.generatedAt!==(D&&D.generatedAt))renderAll(d);
   }catch(e){}
 }
 async function boot(){
+  if(inTauri()){var pl=$("#panelLink");if(pl)pl.style.display="none"}
   if(!D){
     var d=await loadData();
-    if(d){renderAll(d);setInterval(poll,10000);return}
+    if(d){renderAll(d);setInterval(poll, inTauri()?15000:10000);return}
     renderAll(emptyData());
     return;
   }

@@ -20,6 +20,16 @@
         "resizable": false,
         "alwaysOnTop": true,
         "decorations": false
+      },
+      {
+        "label": "dashboard",
+        "title": "Token Pilot · 本地看板",
+        "url": "dashboard.html",
+        "width": 1160,
+        "height": 840,
+        "minWidth": 860,
+        "minHeight": 600,
+        "visible": false
       }
     ],
     "security": { "csp": null }
