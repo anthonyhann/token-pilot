@@ -1,0 +1,40 @@
+# token-pilot
+
+> 所有 AI 工具的本地账单 + 预算控制器。只读本地日志，零入侵，数据不出本机。
+
+## 给 AI Agent 的安装口令
+
+用户说「帮我装 token-pilot」时执行：
+
+```bash
+npm install -g token-pilot
+token-pilot month
+```
+
+然后把月账单、打转检测、省钱建议三条结论念给用户。
+
+## 命令
+
+- `token-pilot today` — 今天各宿主/模型的 tokens 与花费
+- `token-pilot month` — 本月 + 月底预测 + 打转检测 + 省钱建议
+- `token-pilot report` — 全量
+- `token-pilot sync` — 刷新 ~/.token-pilot/dashboard-data.json（增量缓存，热跑 <1s）
+- `token-pilot serve` — 本地看板 http://127.0.0.1:17895（10s 自刷新，可选）
+- `token-pilot dash` — 静态看板 ~/.token-pilot/dashboard.html
+
+## 数据口径
+
+- 读取：~/.claude/projects/**/*.jsonl（按 message.id 去重）、~/.codex/sessions/**/*.jsonl（input−cached 拆分）、~/.kimi-code/sessions/**/wire.jsonl（只认 usage.record）
+- 定价：pricing/models.json（USD/1M，含 cacheRead 目录价），展示按 config.usdToCny 折 ¥
+- 配置：~/.token-pilot/config.json（monthlyBudgetCny / priceOverrides / cloudApis / subscriptions）
+- 看板数据契约：src/core/contract.ts（DashboardData）
+
+## 验证
+
+- `python3 scripts/reconcile.py month` — 独立重算原始日志对账
+- `python3 scripts/verify-dashboard.py` — 36 项看板算法不变量
+- `npm test` — 22 个单元测试
+
+## 仓库
+
+https://github.com/anthonyhann/token-pilot
