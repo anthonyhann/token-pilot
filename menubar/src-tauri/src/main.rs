@@ -190,11 +190,11 @@ fn position_panel_at(w: &tauri::WebviewWindow, rect: &tauri::Rect) {
         y: (my + mh / 2.0) as i32,
     }));
     let scale = w.scale_factor().unwrap_or(scale0);
-    // 面板实际物理尺寸（用户可能拖过大小）
+    // 面板实际物理尺寸（用户可能拖过大小）；兜底取默认 480×760
     let (panel_w, panel_h) = w
         .outer_size()
         .map(|s| (s.width as f64, s.height as f64))
-        .unwrap_or((400.0 * scale, 720.0 * scale));
+        .unwrap_or((480.0 * scale, 760.0 * scale));
 
     let margin = 10.0;
     let gap = 6.0;
