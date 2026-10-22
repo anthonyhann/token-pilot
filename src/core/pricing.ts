@@ -39,33 +39,37 @@ export function loadPricing(): PricingTable {
   return cached!;
 }
 
-// CNY 目录价 → USD（按给定汇率），_alias 展开
+// CNY 目录价 → USD（按给定汇率），_alias 展开（解析到目标后再归一）
 export function loadPricingNormalized(usdToCny = 7.2): PricingTable {
   const base = loadPricing();
+  const cvt = (t?: TierPrice): TierPrice | undefined =>
+    t ? {
+      ...(t.input != null ? { input: t.input / usdToCny } : {}),
+      ...(t.output != null ? { output: t.output / usdToCny } : {}),
+      ...(t.cacheRead != null ? { cacheRead: t.cacheRead / usdToCny } : {}),
+      ...(t.cacheCreation != null ? { cacheCreation: t.cacheCreation / usdToCny } : {}),
+    } : undefined;
+  const norm = (p: ModelPrice): ModelPrice => {
+    if (p.currency !== 'CNY') return p;
+    const flat = cvt(p) ?? {};
+    const out: ModelPrice = { ...p, ...flat, peak: cvt(p.peak), offpeak: cvt(p.offpeak) };
+    // 分时条目顶层不留平铺价（防 NaN 泄漏），由 priceFor 从 offpeak 平铺
+    if (out.peak || out.offpeak) {
+      delete (out as Partial<ModelPrice>).input;
+      delete (out as Partial<ModelPrice>).output;
+      delete (out as Partial<ModelPrice>).cacheRead;
+      delete (out as Partial<ModelPrice>).cacheCreation;
+    }
+    return out;
+  };
   const out: Record<string, ModelPrice> = {};
   for (const [name, p] of Object.entries(base.models)) {
     if (p._alias) {
       const target = base.models[p._alias];
-      if (target) out[name] = { ...target, _alias: undefined };
+      if (target) out[name] = norm({ ...target, _alias: undefined });
       continue;
     }
-    if (p.currency === 'CNY') {
-      const cvt = (t?: TierPrice): TierPrice | undefined =>
-        t ? {
-          input: t.input / usdToCny,
-          output: t.output / usdToCny,
-          cacheRead: t.cacheRead != null ? t.cacheRead / usdToCny : undefined,
-          cacheCreation: t.cacheCreation != null ? t.cacheCreation / usdToCny : undefined,
-        } : undefined;
-      out[name] = {
-        ...p,
-        ...(cvt(p) as TierPrice),
-        peak: cvt(p.peak),
-        offpeak: cvt(p.offpeak),
-      };
-    } else {
-      out[name] = p;
-    }
+    out[name] = norm(p);
   }
   return { models: out, fallback: base.fallback };
 }
@@ -119,7 +123,7 @@ export function isDeepSeekPeak(atMs: number): boolean {
 export function priceFor(model: string, table: PricingTable = loadPricing()): ModelPrice {
   const flatten = (e: ModelPrice): ModelPrice => {
     let r = e._alias && table.models[e._alias] ? table.models[e._alias] : e;
-    if ((r.peak || r.offpeak) && r.input === undefined) {
+    if ((r.peak || r.offpeak) && !(typeof r.input === 'number' && isFinite(r.input))) {
       const t = r.offpeak ?? r.peak!;
       r = { ...r, input: t.input, output: t.output, cacheRead: t.cacheRead, cacheCreation: t.cacheCreation };
     }

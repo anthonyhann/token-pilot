@@ -793,6 +793,7 @@ function buildSettings(
   });
   return {
     models,
+    overrideNames: Object.keys(cfg.priceOverrides ?? {}),
     cloudApis: cfg.cloudApis ?? [],
     subscriptions: cfg.subscriptions ?? [],
     monthlyBudgetCny: monthlyBudgetCny(cfg) ?? null,

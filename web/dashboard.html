@@ -938,8 +938,9 @@ themeBtn.addEventListener("click",function(){setTheme(rootEl.getAttribute("data-
 try{var th=localStorage.getItem("tp-theme");if(th)setTheme(th)}catch(e){}
 
 /* ---------- settings modal ---------- */
-var modal=$("#settingsModal"),settings=null;
+var modal=$("#settingsModal"),settings=null,settingsOrig=null,overrideNames=[];
 function loadSettingsFromD(){
+  overrideNames=((D&&D.settings&&D.settings.overrideNames)||[]);
   var s=(D&&D.settings)||{models:[],cloudApis:[],subscriptions:[],monthlyBudgetCny:null};
   settings={
     models:(s.models||[]).map(function(m){return {n:String(m.name),i:String(m.inputCny),o:String(m.outputCny),c:String(m.cacheReadCny)}}),
@@ -954,7 +955,7 @@ function renderSet(){
   $("#mSubs").innerHTML=settings.subs.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mBudget").value=settings.budget;
 }
-function openModal(){loadSettingsFromD();renderSet();modal.hidden=false;modal.classList.add("open");$("#modalClose").focus()}
+function openModal(){loadSettingsFromD();settingsOrig=JSON.parse(JSON.stringify(settings.models));renderSet();modal.hidden=false;modal.classList.add("open");$("#modalClose").focus()}
 function closeModal(){modal.classList.remove("open");modal.hidden=true}
 $("#settingsBtn").addEventListener("click",openModal);
 $("#modalClose").addEventListener("click",closeModal);
@@ -980,7 +981,13 @@ $$(".addrow").forEach(function(b){
 });
 $("#settingsSave").addEventListener("click",function(){
   var payload={priceOverrides:{},cloudApis:[],subscriptions:[],monthlyBudgetCny:null};
-  settings.models.forEach(function(r){if(r.n)payload.priceOverrides[r.n]={input:parseFloat(r.i)||0,output:parseFloat(r.o)||0,cacheRead:parseFloat(r.c)||0}});
+  settings.models.forEach(function(r){
+    if(!r.n)return;
+    var orig=(settingsOrig||[]).find(function(x){return x.n===r.n});
+    var changed=!orig||orig.i!==r.i||orig.o!==r.o||orig.c!==r.c;
+    var wasOverride=overrideNames.indexOf(r.n)>-1;
+    if(changed||wasOverride)payload.priceOverrides[r.n]={input:parseFloat(r.i)||0,output:parseFloat(r.o)||0,cacheRead:parseFloat(r.c)||0};
+  });
   settings.cloud.forEach(function(r){if(r.n)payload.cloudApis.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
   settings.subs.forEach(function(r){if(r.n)payload.subscriptions.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
   var b=parseFloat(settings.budget);
