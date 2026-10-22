@@ -44,3 +44,8 @@ test('人工覆写优先于官方目录价', () => {
   const p = priceFor('glm-5.3', t);
   assert.ok(Math.abs(p.input - 1.0) < 0.001);
 });
+
+test('本地模型（.gguf/路径）零费用', () => {
+  const c = costOf('/Users/x/.workbuddy/local-models/files/local_model.gguf', U(1_000_000, 100_000));
+  assert.equal(c.totalUsd, 0);
+});

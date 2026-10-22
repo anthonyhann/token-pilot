@@ -145,7 +145,11 @@ export function hasKnownPrice(model: string, table: PricingTable = loadPricing()
 }
 
 // atMs：事件时间戳——分时定价模型（DeepSeek）按它选 peak/offpeak 档
+// 本地模型（.gguf 文件路径）零费用——只记用量不计价
 export function costOf(model: string, usage: UsageTokens, table?: PricingTable, atMs?: number): UsageCost {
+  if (model.endsWith('.gguf') || model.startsWith('/')) {
+    return { inputUsd: 0, outputUsd: 0, cacheReadUsd: 0, cacheCreationUsd: 0, totalUsd: 0 };
+  }
   let p = priceFor(model, table);
   if (atMs && (p.peak || p.offpeak)) {
     const tier = isDeepSeekPeak(atMs) ? p.peak : p.offpeak;
