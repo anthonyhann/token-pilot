@@ -21,10 +21,11 @@ test('大小写归一：MiniMax-M3 命中 minimax-m3', () => {
   assert.equal(p.provider, 'minimax');
 });
 
-test('前缀匹配：deepseek-v4.1-flash-20260601 → deepseek-v4.1-flash', () => {
+test('前缀匹配：deepseek-v4.1-flash-20260601 → deepseek-flash（分时，offpeak 平铺）', () => {
   const p = priceFor('deepseek-v4.1-flash-20260601');
   assert.equal(p.provider, 'deepseek');
-  assert.equal(p.input, 0.14);
+  assert.ok(p.offpeak, '应带分时表');
+  assert.equal(p.offpeak!.input, 1.0);   // CNY 目录价（未归一）
 });
 
 test('横杠别名：deepseek-v4-1-flash 不掉进 fallback', () => {

@@ -5,15 +5,17 @@
 import { loadUnknown, markPriced, markFailed, saveUnknown, type UnknownModel } from './unknown-models.ts';
 
 const PROVIDER_PRICE_PAGES: Record<string, string> = {
-  anthropic: 'https://www.anthropic.com/pricing',
-  openai: 'https://openai.com/api/pricing/',
-  deepseek: 'https://api-docs.deepseek.com/quick_start/pricing',
-  glm: 'https://open.bigmodel.cn/pricing',
-  kimi: 'https://platform.moonshot.cn/docs/pricing/chat',
+  anthropic: 'https://claude.com/pricing#api',
+  openai: 'https://developers.openai.com/api/docs/pricing',
+  deepseek: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/',
+  glm: 'https://docs.bigmodel.cn/cn/guide/start/pricing',
+  kimi: 'https://platform.kimi.com/docs/pricing/chat',
   qwen: 'https://help.aliyun.com/zh/model-studio/models',
   doubao: 'https://www.volcengine.com/docs/82379/1099320',
-  minimax: 'https://platform.minimaxi.com/document/price',
+  minimax: 'https://platform.minimax.cn/docs/pricing/overview',
   hunyuan: 'https://cloud.tencent.com/document/product/1729/97731',
+  grok: 'https://grok.cadn.net.cn/docs_cn/models.html',
+  gemini: 'https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing?hl=zh-CN',
 };
 
 function providerFromModel(model: string): string {

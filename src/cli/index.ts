@@ -45,7 +45,7 @@ interface Agg {
 function aggregate(events: UsageEvent[]): Agg {
   const agg: Agg = { tokens: 0, cost: 0, events: events.length, byAgent: new Map(), byModel: new Map() };
   for (const e of events) {
-    const c = costOf(e.model, e.usage);
+    const c = costOf(e.model, e.usage, undefined, e.timestamp);
     const tok = e.usage.totalTokens;
     agg.tokens += tok;
     agg.cost += c.totalUsd;
@@ -101,7 +101,7 @@ async function cmdReport(cmd: string) {
   const budgetCny = monthlyBudgetCny(cfg);
   if (budgetCny) {
     const { events: monthEvents } = await collectAll(startOfMonth());
-    const monthCostUsd = monthEvents.reduce((s, e) => s + costOf(e.model, e.usage).totalUsd, 0);
+    const monthCostUsd = monthEvents.reduce((s, e) => s + costOf(e.model, e.usage, undefined, e.timestamp).totalUsd, 0);
     const monthCostCny = monthCostUsd * fxRate(cfg);
     const pct = (monthCostCny / budgetCny) * 100;
     const forecast = (monthCostCny / new Date().getDate()) * new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();

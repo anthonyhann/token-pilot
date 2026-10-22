@@ -127,7 +127,7 @@ export async function buildDashboardData(
   const events: Priced[] = filtered
     .filter((e) => e.timestamp > 0)
     .map((e) => {
-      const c = costOf(e.model, e.usage, pricing);
+      const c = costOf(e.model, e.usage, pricing, e.timestamp);
       return Object.assign(e, { _costUsd: c.totalUsd, _cost: c });
     })
     .sort((a, b) => a.timestamp - b.timestamp);

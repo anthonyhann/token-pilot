@@ -32,7 +32,7 @@ export function writeSummary(
     let tokens = 0, costUsd = 0;
     for (const e of evs) {
       tokens += e.usage.totalTokens;
-      costUsd += costOf(e.model, e.usage).totalUsd;
+      costUsd += costOf(e.model, e.usage, undefined, e.timestamp).totalUsd;
     }
     return { tokens, costUsd, events: evs.length };
   }
@@ -42,7 +42,7 @@ export function writeSummary(
       const k = key === 'agent' ? e.agent : e.model;
       const c = m[k] ?? { tokens: 0, costUsd: 0 };
       c.tokens += e.usage.totalTokens;
-      c.costUsd += costOf(e.model, e.usage).totalUsd;
+      c.costUsd += costOf(e.model, e.usage, undefined, e.timestamp).totalUsd;
       m[k] = c;
     }
     return m;
