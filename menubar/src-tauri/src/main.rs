@@ -77,10 +77,48 @@ fn update_tray(tray: &tauri::tray::TrayIcon, item: &MenuItem<Wry>, v: &Value) {
     let _ = item.set_text(menu_label(v));
 }
 
+/// 数据文件 mtime（用于变更检测）
+fn data_mtime_ms() -> u64 {
+    fs::metadata(data_path())
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+// 托盘标题当前值（变更检测用，避免重复 set_title 闪烁）
+static TRAY_TITLE_CUR: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+// 托盘引用（setup 时存入，get_data 命令里也要用）
+static TRAY_REFS: std::sync::OnceLock<(tauri::tray::TrayIcon, MenuItem<Wry>)> = std::sync::OnceLock::new();
+
+/// 数据文件变了就刷新托盘（幂等：内容没变就不动）
+fn refresh_tray_if_changed(tray: &tauri::tray::TrayIcon, item: &MenuItem<Wry>) {
+    if let Some(v) = read_data() {
+        let t = tray_title(&v);
+        let mut cur = TRAY_TITLE_CUR.lock().unwrap();
+        if *cur != t {
+            *cur = t;
+            update_tray(tray, item, &v);
+        }
+    }
+}
+
+fn refresh_tray_global() {
+    if let Some((tray, item)) = TRAY_REFS.get() {
+        refresh_tray_if_changed(tray, item);
+    }
+}
+
 /// detached 方式跑 `token-pilot sync`，找不到命令就忽略
 /// Windows 注意：CreateProcess 不解 PATHEXT，npm 装的 token-pilot 实际是 token-pilot.cmd，
 /// 必须走 cmd /c；macOS/Linux 直接 exec。
+/// sync 完成后立刻刷新托盘（不等下个 tick）。
 fn spawn_sync() {
+    spawn_sync_with(None);
+}
+
+fn spawn_sync_with(done: Option<Box<dyn FnOnce() + Send + 'static>>) {
     #[cfg(target_os = "windows")]
     let spawned = Command::new("cmd")
         .args(["/c", "token-pilot", "sync"])
@@ -96,9 +134,11 @@ fn spawn_sync() {
         .stderr(Stdio::null())
         .spawn();
     if let Ok(mut child) = spawned {
-        // 后台线程回收子进程，避免僵尸；不阻塞 UI
         std::thread::spawn(move || {
             let _ = child.wait();
+            if let Some(f) = done {
+                f();
+            }
         });
     }
 }
@@ -248,8 +288,8 @@ fn toggle_panel_at(app: &tauri::AppHandle, rect: &tauri::Rect) {
             let _ = w.unminimize();
             let _ = w.set_focus();
             position_panel_at(&w, rect);
-            // 打开时触发一次数据刷新（sync 有单飞锁，不会堆积）
-            spawn_sync();
+            // 打开时触发一次数据刷新（sync 有单飞锁，不会堆积）；完成后立刻刷托盘
+            spawn_sync_with(Some(Box::new(refresh_tray_global)));
         }
     }
 }
@@ -264,7 +304,10 @@ fn show_panel(app: &tauri::AppHandle) {
 
 #[tauri::command]
 fn get_data() -> String {
-    fs::read_to_string(data_path()).unwrap_or_else(|_| "{}".to_string())
+    let s = fs::read_to_string(data_path()).unwrap_or_else(|_| "{}".to_string());
+    // 面板轮询驱动托盘保鲜：面板拿到新数据时顺手刷新托盘（幂等，内容没变不动）
+    refresh_tray_global();
+    s
 }
 
 #[tauri::command]
@@ -365,18 +408,27 @@ fn main() {
             if let Some(v) = data.as_ref() {
                 update_tray(&tray, &title_i, v);
             }
+            let _ = TRAY_REFS.set((tray.clone(), title_i.clone()));
 
-            // 每 20s：数据缺失或超过 45s 未更新 → 后台 token-pilot sync（有单飞锁，不堆积）；然后重读刷新托盘
+            // 托盘刷新：5s 轻量 tick（只 stat mtime），文件一变立刻刷新；
+            // 数据超过 45s 未更新 → 后台 sync（有单飞锁，不堆积），sync 完成回调里再立刻刷一次
             {
                 let tray_h = tray.clone();
                 let item_h = title_i.clone();
+                let mut last_mtime = data_mtime_ms();
                 std::thread::spawn(move || loop {
-                    std::thread::sleep(Duration::from_secs(20));
-                    if data_stale() {
-                        spawn_sync();
+                    std::thread::sleep(Duration::from_secs(5));
+                    let m = data_mtime_ms();
+                    if m != last_mtime {
+                        last_mtime = m;
+                        refresh_tray_if_changed(&tray_h, &item_h);
                     }
-                    if let Some(v) = read_data() {
-                        update_tray(&tray_h, &item_h, &v);
+                    if data_stale() {
+                        let tray_h2 = tray_h.clone();
+                        let item_h2 = item_h.clone();
+                        spawn_sync_with(Some(Box::new(move || {
+                            refresh_tray_if_changed(&tray_h2, &item_h2);
+                        })));
                     }
                 });
             }
