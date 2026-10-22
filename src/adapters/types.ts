@@ -24,6 +24,9 @@ export interface Adapter {
   // 文件级能力（磁盘增量缓存用，可选）：
   listFiles?(): Promise<string[]>;                                       // 全部日志文件路径
   readFileEvents?(file: string, sinceMs?: number): Promise<UsageEvent[]>; // 解析单文件
+
+  // 仅会话数能力（Qoder 这类无 token 数据的宿主用，可选）
+  sessionCount?(): Promise<number>;
 }
 
 // 注册表

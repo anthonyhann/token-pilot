@@ -64,24 +64,30 @@ export async function buildAdapterTiers(cfg: TokenPilotConfig): Promise<AdapterT
     const n = await countMatching(codexDir, (name, isDir) => !isDir && name.endsWith('.jsonl'));
     tier1.push({ name: 'Codex', status: 'on', hint: `${n} 个 rollout` });
   }
-  if (hasPi) tier1.push({ name: 'pi', status: 'part', hint: '适配器开发中' });
+  if (hasPi) {
+    const n = await countMatching(piDir, (name, isDir) => !isDir && name.endsWith('.jsonl'));
+    tier1.push({ name: 'pi', status: 'on', hint: `${n} 个会话` });
+  }
 
   // ---- 二档：SQLite 直读 ----
   const opencodeDb = path.join(HOME, '.local', 'share', 'opencode', 'opencode.db');
   const cursorDir = path.join(HOME, '.cursor');
   const tier2: AdapterChip[] = [];
   if (await exists(opencodeDb)) tier2.push({ name: 'OpenCode', status: 'on', hint: 'opencode.db 直读' });
-  if (await exists(cursorDir)) tier2.push({ name: 'Cursor', status: 'part', hint: 'spike 验证中' });
+  if (await exists(cursorDir)) tier2.push({ name: 'Cursor', status: 'sub', hint: '无 token 用量数据' });
 
   // ---- 特殊：仅会话数 ----
   const qoderDir = path.join(HOME, '.qoder');
   const special: AdapterChip[] = [];
-  if (await exists(qoderDir)) special.push({ name: 'Qoder', status: 'sub', hint: 'model 全为 auto' });
+  if (await exists(qoderDir)) {
+    const n = await countMatching(qoderDir, (name, isDir) => isDir && /sess/i.test(name), 5);
+    special.push({ name: 'Qoder', status: 'sub', hint: `${n} 个会话 · 无 token/模型` });
+  }
 
   // ---- 四档：云端用量 API ----
-  const hasDoubao = (cfg.cloudApis ?? []).some((a) => /doubao|豆包|火山/i.test(a.name));
+  const hasDoubao = (cfg.cloudApis ?? []).some((a) => /doubao|豆包|火山/i.test(a.name)) || await exists(path.join(HOME, '.arkcli'));
   const tier4: AdapterChip[] = [
-    { name: 'Doubao · 火山', status: hasDoubao ? 'on' : 'off', hint: hasDoubao ? '已配置' : '未配置' },
+    { name: 'Doubao · 火山', status: hasDoubao ? 'on' : 'off', hint: hasDoubao ? 'arkcli 日粒度' : '未配置' },
     { name: 'OpenAI API', status: 'off', hint: '未配置' },
     { name: 'Kimi 开放平台', status: 'off', hint: '未配置' },
   ];
