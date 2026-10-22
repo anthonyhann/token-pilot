@@ -15,6 +15,8 @@ const PROVIDER_PRICE_PAGES: Record<string, string> = {
   minimax: 'https://platform.minimax.cn/docs/pricing/overview',
   hunyuan: 'https://cloud.tencent.com/document/product/1729/97731',
   grok: 'https://grok.cadn.net.cn/docs_cn/models.html',
+  mimo: 'https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go',
+  longcat: 'https://longcat.chat/platform/docs/zh/api-pay-as-you-go',
   gemini: 'https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing?hl=zh-CN',
 };
 
