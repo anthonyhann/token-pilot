@@ -115,6 +115,7 @@ export const kimiCodeAdapter: Adapter = {
   },
   listFiles,
   readFileEvents,
+  readFileContentEvents: readKimiContentEvents,
   async readEvents(sinceMs = 0): Promise<UsageEvent[]> {
     const events: UsageEvent[] = [];
     for (const file of await listFiles()) {
@@ -129,3 +130,35 @@ export const kimiCodeAdapter: Adapter = {
     return events;
   },
 };
+
+// 内容流：agent.message.appended 里的 toolCalls / role=tool 结果，只取尺寸
+export async function readKimiContentEvents(file: string, sinceMs = 0): Promise<import('../core/schema.ts').ContentEvent[]> {
+  let content: string;
+  try { content = await fs.readFile(file, 'utf8'); } catch { return []; }
+  const events: import('../core/schema.ts').ContentEvent[] = [];
+  const sessionId = path.basename(path.dirname(path.dirname(file)));
+  for (const line of content.split('\n')) {
+    if (!line.includes('agent.message.appended')) continue;
+    let d: { time?: number; message?: { message?: { role?: string; content?: unknown; toolCalls?: { name?: string; arguments?: string }[] } } };
+    try { d = JSON.parse(line); } catch { continue; }
+    const ts = d.time ?? 0;
+    if (ts < sinceMs) continue;
+    const msg = d.message?.message;
+    if (!msg) continue;
+    if (Array.isArray(msg.toolCalls)) {
+      for (const tc of msg.toolCalls) {
+        events.push({
+          agent: 'kimi-code', sessionId, timestamp: ts, kind: 'tool_use',
+          tool: tc.name, sizeBytes: (tc.arguments ?? '').length,
+        });
+      }
+    }
+    if (msg.role === 'tool' && msg.content) {
+      events.push({
+        agent: 'kimi-code', sessionId, timestamp: ts, kind: 'tool_result',
+        sizeBytes: JSON.stringify(msg.content).length,
+      });
+    }
+  }
+  return events;
+}

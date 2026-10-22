@@ -90,3 +90,31 @@ export const opencodeAdapter: Adapter = {
     return this.readFileEvents!(DB_PATH, sinceMs);
   },
 };
+
+// 内容流：part 表 type=tool 的 state.input/output，只取尺寸
+export async function readOpencodeContentEvents(file: string, sinceMs = 0): Promise<import('../core/schema.ts').ContentEvent[]> {
+  const events: import('../core/schema.ts').ContentEvent[] = [];
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(file, { readOnly: true });
+    const rows = db.prepare(
+      `SELECT p.session_id AS sid, p.time_created AS ts, p.data AS data
+       FROM part p WHERE p.time_created >= ? AND json_extract(p.data,'$.type') = 'tool'`
+    ).all(sinceMs) as { sid: string; ts: number; data: string }[];
+    for (const r of rows) {
+      let d: { tool?: string; state?: { input?: unknown; output?: unknown } };
+      try { d = JSON.parse(r.data); } catch { continue; }
+      const inSize = d.state?.input ? JSON.stringify(d.state.input).length : 0;
+      const outSize = d.state?.output ? JSON.stringify(d.state.output).length : 0;
+      events.push({ agent: 'opencode', sessionId: r.sid, timestamp: r.ts, kind: 'tool_use', tool: d.tool, sizeBytes: inSize });
+      if (outSize > 0) {
+        events.push({ agent: 'opencode', sessionId: r.sid, timestamp: r.ts, kind: 'tool_result', tool: d.tool, sizeBytes: outSize });
+      }
+    }
+  } catch {
+    // 锁定或损坏时跳过
+  } finally {
+    try { db?.close(); } catch { /* 忽略 */ }
+  }
+  return events;
+}

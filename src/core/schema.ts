@@ -52,3 +52,15 @@ export interface UsageSummary {
   totalCostUsd?: number;
   sessions: number;
 }
+
+// 内容流事件 —— 只记尺寸，不落内容（少采集红线）
+// 用于压缩潜力检测：tool 输出的体积与存活轮数
+export interface ContentEvent {
+  agent: string;
+  sessionId: string;
+  timestamp: number;        // unix ms
+  kind: 'tool_use' | 'tool_result';
+  tool?: string;            // 'Read' | 'Bash' | ...
+  targetPath?: string;      // 读取/操作的文件路径（重复读取检测用）
+  sizeBytes: number;        // 内容的 JSON 序列化尺寸
+}

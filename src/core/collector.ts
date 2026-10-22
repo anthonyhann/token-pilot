@@ -9,7 +9,7 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { UsageEvent } from './schema.ts';
+import type { UsageEvent, ContentEvent } from './schema.ts';
 import type { Adapter } from '../adapters/types.ts';
 import { claudeCodeAdapter } from '../adapters/claude-code.ts';
 import { codexAdapter } from '../adapters/codex.ts';
@@ -25,6 +25,7 @@ export const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCod
 
 export interface CollectResult {
   events: UsageEvent[];
+  contentEvents: ContentEvent[];
   detected: string[];
 }
 
@@ -64,9 +65,10 @@ interface CacheFileEntry {
   mtime: number;
   adapter: string;
   events: UsageEvent[];
+  content?: ContentEvent[];
 }
 interface CacheFile {
-  version: 1;
+  version: 2;
   files: Record<string, CacheFileEntry>;
 }
 
@@ -74,9 +76,9 @@ async function loadCache(): Promise<CacheFile> {
   try {
     const raw = await fs.readFile(CACHE_PATH, 'utf8');
     const c = JSON.parse(raw) as CacheFile;
-    if (c.version === 1 && c.files) return c;
+    if (c.version === 2 && c.files) return c;
   } catch { /* 无缓存 */ }
-  return { version: 1, files: {} };
+  return { version: 2, files: {} };
 }
 
 async function saveCache(cache: CacheFile): Promise<void> {
@@ -112,7 +114,12 @@ export async function collectCached(sinceMs = 0): Promise<CollectResult & { pars
           return;
         }
         const events = await ad.readFileEvents!(f, windowStart);
-        nextFiles[f] = { mtime, adapter: ad.meta.id, events };
+        // 内容流（压缩潜力用）：有能力的 adapter 顺手采，只取尺寸不落内容
+        let contentEv: ContentEvent[] | undefined;
+        if (ad.readFileContentEvents) {
+          try { contentEv = await ad.readFileContentEvents(f, windowStart); } catch { contentEv = undefined; }
+        }
+        nextFiles[f] = { mtime, adapter: ad.meta.id, events, content: contentEv };
         parsed++;
       }));
     } else {
@@ -125,8 +132,12 @@ export async function collectCached(sinceMs = 0): Promise<CollectResult & { pars
   }
 
   // 合并 + 按 agent:eventId 去重（取 totalTokens 最大，防流式快照残留）+ 窗口过滤
+  const contentAll: ContentEvent[] = [];
   const byId = new Map<string, UsageEvent>();
   for (const entry of Object.values(nextFiles)) {
+    if (entry.content) {
+      for (const c of entry.content) if (c.timestamp >= sinceMs) contentAll.push(c);
+    }
     for (const e of entry.events) {
       if (e.timestamp < sinceMs) continue;
       const key = `${e.agent}:${e.eventId}`;
@@ -136,14 +147,15 @@ export async function collectCached(sinceMs = 0): Promise<CollectResult & { pars
   }
 
   // 写缓存（下次 sync 提速）
-  try { await saveCache({ version: 1, files: nextFiles }); } catch { /* 缓存失败不阻塞 */ }
+  try { await saveCache({ version: 2, files: nextFiles }); } catch { /* 缓存失败不阻塞 */ }
 
-  return { events: [...byId.values()], detected, parsedFiles: parsed, cachedFiles: cached };
+  return { events: [...byId.values()], contentEvents: contentAll, detected, parsedFiles: parsed, cachedFiles: cached };
 }
 
 // 无缓存全量（today/month/report 命令的直读路径）
 export async function collectAll(sinceMs = 0): Promise<CollectResult> {
   const all: UsageEvent[] = [];
+  const contentAll: ContentEvent[] = [];
   const detected: string[] = [];
   for (const ad of ALL_ADAPTERS) {
     if (!(await ad.detect())) continue;
@@ -153,8 +165,19 @@ export async function collectAll(sinceMs = 0): Promise<CollectResult> {
     } catch {
       // 单 adapter 失败不阻塞整体
     }
+    if (ad.listFiles && ad.readFileContentEvents) {
+      try {
+        for (const f of await ad.listFiles()) {
+          try {
+            const st = await fs.stat(f);
+            if (st.mtimeMs < sinceMs) continue;
+          } catch { continue; }
+          contentAll.push(...(await ad.readFileContentEvents(f, sinceMs)));
+        }
+      } catch { /* 忽略 */ }
+    }
   }
-  return { events: all, detected };
+  return { events: all, contentEvents: contentAll, detected };
 }
 
 // 常驻内存增量采集器（serve 用）：启动走磁盘缓存，之后内存增量合并，全量降频 30min
@@ -162,7 +185,7 @@ export class Collector {
   private byId = new Map<string, UsageEvent>();
   private lastFull = 0;
 
-  async sync(): Promise<{ events: UsageEvent[]; detected: string[] }> {
+  async sync(): Promise<{ events: UsageEvent[]; contentEvents: ContentEvent[]; detected: string[] }> {
     const now = Date.now();
     const wantFull = this.byId.size === 0 || now - this.lastFull > 30 * 60_000;
     // 全量分支抢锁：CLI sync 在跑就让路，退化为增量，绝不叠加全量扫描
@@ -177,10 +200,10 @@ export class Collector {
       }
     }
     const since = now - 3 * 60_000; // 增量窗口留 3 分钟重叠
-    const { events, detected } = await collectAll(since);
+    const { events, contentEvents, detected } = await collectAll(since);
     for (const e of events) {
       this.byId.set(`${e.agent}:${e.eventId}`, e);
     }
-    return { events: [...this.byId.values()], detected };
+    return { events: [...this.byId.values()], contentEvents, detected };
   }
 }

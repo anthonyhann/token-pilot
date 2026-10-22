@@ -4,7 +4,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { UsageEvent } from '../core/schema.ts';
+import type { UsageEvent, ContentEvent } from '../core/schema.ts';
 import type { Adapter } from './types.ts';
 
 const HOME = os.homedir();
@@ -162,6 +162,51 @@ async function listFiles(): Promise<string[]> {
   return out;
 }
 
+// 内容流：tool_use（assistant）与 tool_result（user）只取尺寸与目标路径，不落内容
+async function readFileContentEvents(file: string, sinceMs = 0): Promise<ContentEvent[]> {
+  let content: string;
+  try { content = await fs.readFile(file, 'utf8'); } catch { return []; }
+  const events: ContentEvent[] = [];
+  const sessionId = path.basename(file, '.jsonl');
+  for (const line of content.split('\n')) {
+    if (!line.includes('tool_use') && !line.includes('tool_result')) continue;
+    let d: {
+      type?: string; timestamp?: string;
+      message?: { content?: unknown };
+    };
+    try { d = JSON.parse(line); } catch { continue; }
+    const ts = d.timestamp ? new Date(d.timestamp).getTime() : 0;
+    if (ts < sinceMs) continue;
+    const items = d.message?.content;
+    if (!Array.isArray(items)) continue;
+    for (const c of items) {
+      if (!c || typeof c !== 'object') continue;
+      const cc = c as { type?: string; name?: string; input?: unknown; content?: unknown };
+      if (d.type === 'assistant' && cc.type === 'tool_use') {
+        const input = cc.input as { file_path?: string; path?: string; command?: string } | undefined;
+        events.push({
+          agent: 'claude-code',
+          sessionId,
+          timestamp: ts,
+          kind: 'tool_use',
+          tool: cc.name,
+          targetPath: input?.file_path ?? input?.path,
+          sizeBytes: cc.input ? JSON.stringify(cc.input).length : 0,
+        });
+      } else if (d.type === 'user' && cc.type === 'tool_result') {
+        events.push({
+          agent: 'claude-code',
+          sessionId,
+          timestamp: ts,
+          kind: 'tool_result',
+          sizeBytes: cc.content ? JSON.stringify(cc.content).length : 0,
+        });
+      }
+    }
+  }
+  return events;
+}
+
 export const claudeCodeAdapter: Adapter = {
   meta: {
     id: 'claude-code',
@@ -181,6 +226,7 @@ export const claudeCodeAdapter: Adapter = {
 
   listFiles,
   readFileEvents,
+  readFileContentEvents,
 
   async readEvents(sinceMs = 0): Promise<UsageEvent[]> {
     // 同一 message.id 只可能出现在一个会话文件里，按文件合并即可

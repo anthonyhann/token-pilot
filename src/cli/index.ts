@@ -155,7 +155,7 @@ async function cmdSync(): Promise<void> {
     const cfg = loadConfig();
     const fx = fxRate(cfg);
     const pricing = loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx);
-    const { events, detected, parsedFiles, cachedFiles } = await collectCached(0);
+    const { events, contentEvents, detected, parsedFiles, cachedFiles } = await collectCached(0);
 
     // 未知模型追踪：定价表+覆写都没有的，记账待补价
     const seen = new Set<string>();
@@ -171,7 +171,7 @@ async function cmdSync(): Promise<void> {
       for (const n of fetched) console.log(`  + ${n}`);
     }
 
-    const data = await buildDashboardData(events, cfg, loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx));
+    const data = await buildDashboardData(events, cfg, loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx), contentEvents);
     writeDashboardDataFile(data);
     console.log(`token-pilot sync · ${detected.length} 宿主 · 解析 ${parsedFiles} 文件 / 缓存命中 ${cachedFiles}`);
     console.log(`今日：¥${data.hero.today.costCny.toFixed(2)} · ${data.hero.today.calls} 次调用 · 托盘：${data.trayTitle}`);
@@ -238,6 +238,29 @@ function cmdPrices(): void {
   console.log('');
 }
 
+// 压缩潜力报告（CLI 明细版）
+async function cmdCompressReport(): Promise<void> {
+  const cfg = loadConfig();
+  const fx = fxRate(cfg);
+  const pricing = loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx);
+  const { events, contentEvents } = await collectCached(0);
+  const { computeCompression } = await import('../core/compression.ts');
+  const r = computeCompression(events, contentEvents, pricing);
+  console.log('\ntoken-pilot · 压缩潜力报告（本月）\n');
+  if (r.itemCount === 0) {
+    console.log('未发现明显可压缩的上下文浪费。');
+    return;
+  }
+  console.log(`可压缩空间（估算）：$${r.potentialUsd.toFixed(2)} – $${r.potentialUsdMax.toFixed(2)} / 月`);
+  console.log(`模式拆分：陈旧 tool 输出 $${r.patterns.stale.toFixed(2)} · 重复读取 $${r.patterns.reread.toFixed(2)} · 超长输出 $${r.patterns.long.toFixed(2)}`);
+  console.log('\n最浪费的会话：');
+  for (const s of r.sessions) {
+    console.log(`  ${s.agent} · ${s.key.slice(-16)} · $${s.wasteUsd.toFixed(2)} · ${s.items} 处 · ${s.topPatterns.join('/')}`);
+  }
+  console.log('\n建议：上下文压缩代理可把这部分省下来（规则法已验证 −29%~−48% 输入）。');
+  console.log('');
+}
+
 async function main() {
   const cmd = process.argv[2] ?? 'today';
   if (cmd === 'serve') {
@@ -248,6 +271,7 @@ async function main() {
   if (cmd === 'sync') return cmdSync();
   if (cmd === 'dash') return cmdDash();
   if (cmd === 'prices') return cmdPrices();
+  if (cmd === 'compress-report') return cmdCompressReport();
   if (cmd === 'today' || cmd === 'month' || cmd === 'report' || cmd === 'all') {
     return cmdReport(cmd === 'all' ? 'all' : cmd);
   }

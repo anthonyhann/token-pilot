@@ -109,6 +109,14 @@ export interface SettingsData {
   usdToCny: number;
 }
 
+export interface CompressionData {
+  potentialCny: number;        // 本月若压缩可省（保守口径）
+  potentialCnyMax: number;     // 上限口径
+  itemCount: number;
+  patterns: { stale: number; reread: number; long: number };  // CNY
+  sessions: { key: string; agent: string; wasteCny: number; items: number; topPatterns: string[] }[];
+}
+
 export interface TrendSplit {
   cacheReadCny: number;
   cacheWriteCny: number;
@@ -160,6 +168,7 @@ export interface DashboardData {
   hostRank: RankRow[];    // 今日，最多 6
 
   savings: SavingsCard[]; // 最多 3
+  compression: CompressionData | null;  // 压缩潜力（2A）
 
   adapters: AdapterTier[];
 

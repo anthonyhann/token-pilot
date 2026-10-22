@@ -10,6 +10,7 @@ import { costOf, cacheSavingsUsd, priceFor, type PricingTable } from './pricing.
 import { fxRate, monthlyBudgetCny, type TokenPilotConfig } from './config.ts';
 import { detectRetryLoops } from './retry-detector.ts';
 import { savingsAdvice } from './savings.ts';
+import { computeCompression } from './compression.ts';
 import { buildAdapterTiers, HOST_TIERS } from './registry.ts';
 
 const AGENT_NAMES: Record<string, string> = {
@@ -99,6 +100,7 @@ export async function buildDashboardData(
   rawEvents: UsageEvent[],
   cfg: TokenPilotConfig,
   pricing: PricingTable,
+  contentEvents: import('./schema.ts').ContentEvent[] = [],
 ): Promise<DashboardData> {
   const now = new Date();
   const nowMs = now.getTime();
@@ -444,6 +446,30 @@ export async function buildDashboardData(
   // ---------- 省钱建议 ----------
   const savings = buildSavings(events, cfg, pricing, sessMap, fx, d7, t0);
 
+  // ---------- 压缩潜力（2A：规则引擎，本月窗口） ----------
+  const monthEvents = events.filter((e) => e.timestamp >= m0);
+  const monthContent = contentEvents.filter((c) => c.timestamp >= m0);
+  const comp = monthContent.length > 0 ? computeCompression(monthEvents, monthContent, pricing) : null;
+  const compression = comp && comp.potentialUsd > 0.01
+    ? {
+        potentialCny: comp.potentialUsd * fx,
+        potentialCnyMax: comp.potentialUsdMax * fx,
+        itemCount: comp.itemCount,
+        patterns: { stale: comp.patterns.stale * fx, reread: comp.patterns.reread * fx, long: comp.patterns.long * fx },
+        sessions: comp.sessions.map((s) => ({ key: s.key, agent: s.agent, wasteCny: s.wasteUsd * fx, items: s.items, topPatterns: s.topPatterns })),
+      }
+    : null;
+  // 压缩潜力够大才进省钱建议卡（第 4 张）
+  if (compression && compression.potentialCny >= 5) {
+    savings.push({
+      kind: 'pos',
+      icon: 'cache',
+      title: '上下文压缩空间',
+      desc: `本月 ${compression.itemCount} 处上下文重发可压缩（陈旧输出/重复读取/超长日志），若压缩约省 ${fmtCny(compression.potentialCny)}–${fmtCny(compression.potentialCnyMax)}。运行 token-pilot compress-report 看明细。`,
+      amount: `约省 ${fmtCny(compression.potentialCny)}/月`,
+    });
+  }
+
   // ---------- 适配器状态 ----------
   const adapters: AdapterTier[] = await buildAdapterTiers(cfg);
 
@@ -471,6 +497,7 @@ export async function buildDashboardData(
     modelRank,
     hostRank,
     savings,
+    compression,
     adapters,
     settings,
   };

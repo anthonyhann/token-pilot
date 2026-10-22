@@ -50,8 +50,8 @@ export interface ServeState {
 export async function refreshOnce(state: ServeState): Promise<DashboardData> {
   const cfg = loadConfig();
   const pricing = loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fxRate(cfg));
-  const { events } = await state.collector.sync();
-  const data = await buildDashboardData(events, cfg, pricing);
+  const { events, contentEvents } = await state.collector.sync();
+  const data = await buildDashboardData(events, cfg, pricing, contentEvents ?? []);
   state.data = data;
   writeDashboardDataFile(data);
   // 预算告警（每跨一次阈值提醒一次）

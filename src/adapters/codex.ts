@@ -121,6 +121,7 @@ export const codexAdapter: Adapter = {
   },
   listFiles,
   readFileEvents,
+  readFileContentEvents: readCodexContentEvents,
   async readEvents(sinceMs = 0): Promise<UsageEvent[]> {
     const events: UsageEvent[] = [];
     for (const file of await listFiles()) {
@@ -135,3 +136,31 @@ export const codexAdapter: Adapter = {
     return events;
   },
 };
+
+// 内容流：response_item 的 function_call / function_call_output，只取尺寸
+export async function readCodexContentEvents(file: string, sinceMs = 0): Promise<import('../core/schema.ts').ContentEvent[]> {
+  let content: string;
+  try { content = await fs.readFile(file, 'utf8'); } catch { return []; }
+  const events: import('../core/schema.ts').ContentEvent[] = [];
+  const sessionId = path.basename(file, '.jsonl');
+  for (const line of content.split('\n')) {
+    if (!line.includes('function_call')) continue;
+    let d: { timestamp?: string; payload?: { type?: string; name?: string; arguments?: string; output?: string } };
+    try { d = JSON.parse(line); } catch { continue; }
+    const ts = d.timestamp ? new Date(d.timestamp).getTime() : 0;
+    if (ts < sinceMs) continue;
+    const p = d.payload;
+    if (p?.type === 'function_call') {
+      events.push({
+        agent: 'codex', sessionId, timestamp: ts, kind: 'tool_use',
+        tool: p.name, sizeBytes: (p.arguments ?? '').length,
+      });
+    } else if (p?.type === 'function_call_output') {
+      events.push({
+        agent: 'codex', sessionId, timestamp: ts, kind: 'tool_result',
+        sizeBytes: (p.output ?? '').length,
+      });
+    }
+  }
+  return events;
+}

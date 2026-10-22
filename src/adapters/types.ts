@@ -1,7 +1,7 @@
 // Adapter 接口 — 声明式，学 LoongSuite Pilot 的 agents.d 思路
 // 加一个新宿主 = 加一个 adapter 文件，不改核心
 
-import type { UsageEvent } from '../core/schema.ts';
+import type { UsageEvent, ContentEvent } from '../core/schema.ts';
 
 export interface AdapterMeta {
   id: string;                  // 'claude-code'
@@ -27,6 +27,9 @@ export interface Adapter {
 
   // 仅会话数能力（Qoder 这类无 token 数据的宿主用，可选）
   sessionCount?(): Promise<number>;
+
+  // 内容流能力（压缩潜力检测用，可选）：只产尺寸事件，不落内容
+  readFileContentEvents?(file: string, sinceMs?: number): Promise<ContentEvent[]>;
 }
 
 // 注册表

@@ -107,7 +107,7 @@ A solo dev + a few AI agents running product experiments (remote, Xi'an). token-
 - [ ] Cloud usage APIs: OpenAI / Moonshot (user-provided API key)
 
 **Throttling (step 2)**
-- [ ] 2A Compression potential measurement (after-the-fact, from logs)
+- [x] 2A Compression potential measurement (rule engine: stale/reread/long outputs)
 - [ ] 2B Compression execution (integrate Gobstopper-style proxy first)
 - [ ] Cheap-model routing (optional local proxy — never touches your config by default)
 - [ ] Proactive retry-loop breaker notifications
