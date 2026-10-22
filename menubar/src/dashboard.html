@@ -949,9 +949,9 @@ function loadSettingsFromD(){
   };
 }
 function renderSet(){
-  $("#mModels").innerHTML=settings.models.map(function(r,i){return '<div class="m-row r4"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="模型名"><input data-k="i" data-i="'+i+'" value="'+esc(r.i)+'" aria-label="输入单价"><input data-k="o" data-i="'+i+'" value="'+esc(r.o)+'" aria-label="输出单价"><input data-k="c" data-i="'+i+'" value="'+esc(r.c)+'" aria-label="缓存读单价"><button class="delrow" type="button" data-del="models" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
-  $("#mCloud").innerHTML=settings.cloud.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费用"><button class="delrow" type="button" data-del="cloud" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
-  $("#mSubs").innerHTML=settings.subs.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
+  $("#mModels").innerHTML=settings.models.map(function(r,i){return '<div class="m-row r4"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="模型名" placeholder="模型名，如 glm-5.3"><input data-k="i" data-i="'+i+'" value="'+esc(r.i)+'" aria-label="输入单价"><input data-k="o" data-i="'+i+'" value="'+esc(r.o)+'" aria-label="输出单价"><input data-k="c" data-i="'+i+'" value="'+esc(r.c)+'" aria-label="缓存读单价"><button class="delrow" type="button" data-del="models" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
+  $("#mCloud").innerHTML=settings.cloud.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费用"><button class="delrow" type="button" data-del="cloud" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
+  $("#mSubs").innerHTML=settings.subs.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mBudget").value=settings.budget;
 }
 function openModal(){loadSettingsFromD();renderSet();modal.hidden=false;modal.classList.add("open");$("#modalClose").focus()}
@@ -974,7 +974,7 @@ modal.addEventListener("click",function(e){
 $$(".addrow").forEach(function(b){
   b.addEventListener("click",function(){
     var k=b.dataset.add;
-    settings[k].push(k==="models"?{n:"新模型",i:"",o:"",c:""}:{n:"名称",p:""});
+    settings[k].push(k==="models"?{n:"",i:"",o:"",c:""}:{n:"",p:""});
     renderSet();
   });
 });
