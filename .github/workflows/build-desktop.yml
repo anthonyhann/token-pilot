@@ -48,6 +48,10 @@ jobs:
       - name: Install tauri-cli
         run: cargo install tauri-cli --version "^2" --locked
 
+      - name: Clean stale bundle artifacts（防缓存带旧版本包）
+        run: rm -rf src-tauri/target/*/release/bundle src-tauri/target/release/bundle
+        working-directory: menubar
+
       - name: Build bundles
         run: cargo tauri build --target ${{ matrix.target }}
         working-directory: menubar
