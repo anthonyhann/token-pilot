@@ -62,7 +62,10 @@ button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 .mb-time{font-variant-numeric:tabular-nums}
 
 .stage{max-width:680px;margin:0 auto;padding:12px}
-.panel{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 24px)}
+.p-head{flex:none;position:relative;z-index:2;background:var(--surface)}
+.p-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.p-foot{flex:none;background:var(--surface)}
 .p-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid var(--border)}
 .p-logo{width:24px;height:24px;border-radius:8px;background:linear-gradient(120deg,var(--accent),var(--accent-2) 60%,var(--accent-3));display:grid;place-items:center;flex:none}
 .p-logo svg{width:13px;height:13px;fill:oklch(1 0 0)}
@@ -233,6 +236,7 @@ body.closed .reopen:hover{color:var(--fg)}
       <button class="theme-btn" id="closeBtn" type="button" aria-label="关闭面板"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </header>
 
+    <div class="p-body">
     <section class="hero" data-od-id="hero">
       <div class="hero-top">
         <div class="seg2" role="group" aria-label="统计周期" id="periodSeg">
@@ -322,6 +326,7 @@ body.closed .reopen:hover{color:var(--fg)}
       </div>
     </div>
 
+    </div>
     <footer class="p-foot" data-od-id="panel-foot">
       <a class="open-full" href="http://127.0.0.1:17895/">打开完整看板<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></a>
       <span class="note">本地运行 · 数据不出本机</span>
