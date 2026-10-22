@@ -10,7 +10,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](#-状态栏应用)
-[![Tests](https://img.shields.io/badge/tests-22%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-23%20passing-brightgreen)](tests/)
 [![Accuracy](https://img.shields.io/badge/对账脚本-逐项一致-blue)](#-数据准确性)
 
 [快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [TODO](#-todo-list) · [English](README-en.md) · [llms.txt](llms.txt)
@@ -53,7 +53,7 @@ token-pilot month     # 本月账单 + 月底预测 + 打转检测 + 省钱建�
 | 谁在烧 | 看「宿主/模型/项目榜」 | 哪个工具、哪个模型、哪个项目花最多，一目了然 |
 | 国产模型 | 不用配置 | DeepSeek/GLM/Kimi/Qwen 走宿主日志 model 字段自动归一 |
 
-**兼容你的工具链：** Claude Code ✅ · Codex ✅ · Kimi Code ✅（全量 token）· DeepSeek/GLM/Kimi/Qwen/MiniMax/混元/MiMo/LongCat/Doubao ✅（模型归一）· 其余 12 款仅检测 · 桌面订阅端记固定月费
+**兼容你的工具链：** Claude Code ✅ · Codex ✅ · Kimi Code ✅ · OpenCode ✅（全量 token）· DeepSeek/GLM/Kimi/Qwen/MiniMax/混元/MiMo/LongCat/Doubao ✅（模型归一）· 其余 12 款仅检测 · 桌面订阅端记固定月费
 
 ## 📈 数据准确性
 
@@ -62,7 +62,7 @@ token-pilot month     # 本月账单 + 月底预测 + 打转检测 + 省钱建�
 ```bash
 python3 scripts/reconcile.py month    # 第三方视角独立重算原始日志，与 CLI 逐项对账
 python3 scripts/verify-dashboard.py   # 看板 36 项算法不变量校验
-npm test                              # 22 个单元测试（定价/采集口径/聚合/注入）
+npm test                              # 23 个单元测试（定价/采集口径/聚合/注入）
 ```
 
 实测修过的口径坑（2026-10-21，本机 4787 个日志文件）：
@@ -110,7 +110,7 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 ## ✅ TODO LIST
 
 **采集覆盖**
-- [ ] OpenCode adapter（SQLite，`~/.local/share/opencode/opencode.db`）
+- [x] OpenCode adapter（SQLite）
 - [ ] Qoder adapter（仅会话数，model 全为 auto）
 - [ ] pi adapter
 - [ ] Cursor spike（SQLite 结构验证中）

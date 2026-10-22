@@ -70,7 +70,7 @@ export async function buildAdapterTiers(cfg: TokenPilotConfig): Promise<AdapterT
   const opencodeDb = path.join(HOME, '.local', 'share', 'opencode', 'opencode.db');
   const cursorDir = path.join(HOME, '.cursor');
   const tier2: AdapterChip[] = [];
-  if (await exists(opencodeDb)) tier2.push({ name: 'OpenCode', status: 'part', hint: '适配器开发中' });
+  if (await exists(opencodeDb)) tier2.push({ name: 'OpenCode', status: 'on', hint: 'opencode.db 直读' });
   if (await exists(cursorDir)) tier2.push({ name: 'Cursor', status: 'part', hint: 'spike 验证中' });
 
   // ---- 特殊：仅会话数 ----

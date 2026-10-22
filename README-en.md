@@ -10,7 +10,7 @@ For anyone running Claude Code / Codex / Kimi Code with Chinese models (DeepSeek
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](#-menubar-app)
-[![Tests](https://img.shields.io/badge/tests-22%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-23%20passing-brightgreen)](tests/)
 [![Accuracy](https://img.shields.io/badge/reconciliation-exact-blue)](#-data-accuracy)
 
 [Quickstart](#-quickstart) · [Menubar App](#-menubar-app) · [Data Accuracy](#-data-accuracy) · [When NOT to use](#-when-not-to-use-it) · [中文](README.md) · [llms.txt](llms.txt)
@@ -53,7 +53,7 @@ Grab `.dmg` (macOS Apple Silicon) or `.msi` (Windows x64) from [Releases](../../
 | Who's burning | see host/model/project ranks | which tool, which model, which project costs most |
 | Chinese models | nothing to configure | DeepSeek/GLM/Kimi/Qwen auto-normalized via host-log `model` field |
 
-**Works with your toolchain:** Claude Code ✅ · Codex ✅ · Kimi Code ✅ (full tokens) · DeepSeek/GLM/Kimi/Qwen/MiniMax/Hunyuan/MiMo/LongCat/Doubao ✅ (model normalization) · 12 more detected-only · desktop subscription apps tracked as fixed monthly fees
+**Works with your toolchain:** Claude Code ✅ · Codex ✅ · Kimi Code ✅ · OpenCode ✅ (full tokens) · DeepSeek/GLM/Kimi/Qwen/MiniMax/Hunyuan/MiMo/LongCat/Doubao ✅ (model normalization) · 12 more detected-only · desktop subscription apps tracked as fixed monthly fees
 
 ## 📈 Data accuracy
 
@@ -62,7 +62,7 @@ A billing tool that's wrong is worse than none. Accuracy here is **verifiable**:
 ```bash
 python3 scripts/reconcile.py month    # independent third-party recount of raw logs vs CLI
 python3 scripts/verify-dashboard.py   # 36 dashboard algorithm invariants
-npm test                              # 22 unit tests (pricing / collection / aggregation)
+npm test                              # 23 unit tests (pricing / collection / aggregation)
 ```
 
 Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
@@ -76,7 +76,7 @@ Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
 ## 📊 Why trust me
 
 - It runs my own AI bill: **¥2,546 / 810M tokens** this month (2026-10-21, screenshots above are my live data)
-- 36 dashboard invariants + 22 unit tests + an independent reconciliation script — all runnable out of the box
+- 36 dashboard invariants + 23 unit tests + an independent reconciliation script — all runnable out of the box
 - Honest about rate accounting: logs book tokens at call-completion time; in-flight generations aren't counted until they finish (noted in the dashboard)
 
 ## ⚠️ When NOT to use it
@@ -102,7 +102,7 @@ A solo dev + a few AI agents running product experiments (remote, Xi'an). token-
 ## ✅ TODO
 
 **Coverage**
-- [ ] OpenCode adapter (SQLite) · Qoder (session counts) · pi · Cursor spike
+- [x] OpenCode adapter (SQLite) · Qoder (session counts) · pi · Cursor spike
 - [ ] Cloud usage APIs: Doubao Volcano / OpenAI / Moonshot
 
 **Throttling (step 2)**

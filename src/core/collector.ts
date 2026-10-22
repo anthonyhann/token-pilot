@@ -14,9 +14,10 @@ import type { Adapter } from '../adapters/types.ts';
 import { claudeCodeAdapter } from '../adapters/claude-code.ts';
 import { codexAdapter } from '../adapters/codex.ts';
 import { kimiCodeAdapter } from '../adapters/kimi-code.ts';
+import { opencodeAdapter } from '../adapters/opencode.ts';
 import { CONFIG_DIR } from './config.ts';
 
-export const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCodeAdapter];
+export const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCodeAdapter, opencodeAdapter];
 
 export interface CollectResult {
   events: UsageEvent[];

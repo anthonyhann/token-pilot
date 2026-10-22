@@ -13,6 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { Collector } from '../core/collector.ts';
+import { autoOverrides } from '../core/price-fetch.ts';
 import { buildDashboardData } from '../core/aggregate.ts';
 import { loadPricingWithOverrides } from '../core/pricing.ts';
 import { loadConfig, saveConfig, fxRate, monthlyBudgetCny, DATA_PATH, CONFIG_DIR } from '../core/config.ts';
@@ -48,7 +49,7 @@ export interface ServeState {
 
 export async function refreshOnce(state: ServeState): Promise<DashboardData> {
   const cfg = loadConfig();
-  const pricing = loadPricingWithOverrides(cfg.priceOverrides, fxRate(cfg));
+  const pricing = loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fxRate(cfg));
   const { events } = await state.collector.sync();
   const data = await buildDashboardData(events, cfg, pricing);
   state.data = data;

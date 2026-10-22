@@ -52,6 +52,14 @@ export function loadPricingWithOverrides(
   return { models, fallback: base.fallback };
 }
 
+// 该模型是否有已知价（精确/大小写/前缀命中）；false = 会落到 fallback
+export function hasKnownPrice(model: string, table: PricingTable = loadPricing()): boolean {
+  if (table.models[model]) return true;
+  const lower = model.toLowerCase();
+  if (Object.keys(table.models).some((k) => k.toLowerCase() === lower)) return true;
+  return Object.keys(table.models).some((k) => lower.startsWith(k.toLowerCase()) || k.toLowerCase().startsWith(lower));
+}
+
 // 精确匹配 → 大小写归一 → 前缀匹配 → fallback
 export function priceFor(model: string, table: PricingTable = loadPricing()): ModelPrice {
   if (table.models[model]) return table.models[model];

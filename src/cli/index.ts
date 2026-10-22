@@ -10,6 +10,9 @@ import { notify } from '../core/alert.ts';
 import { loadConfig, fxRate, monthlyBudgetCny } from '../core/config.ts';
 import { writeSummary } from '../core/metrics.ts';
 import { collectAll, collectCached, acquireSyncLock, releaseSyncLock } from '../core/collector.ts';
+import { hasKnownPrice, priceFor } from '../core/pricing.ts';
+import { trackUnknown, loadUnknown } from '../core/unknown-models.ts';
+import { autoFetchPrices, autoOverrides } from '../core/price-fetch.ts';
 import { buildDashboardData } from '../core/aggregate.ts';
 import { serve, bakeDashboard, writeDashboardDataFile } from './serve.ts';
 import type { UsageEvent } from '../core/schema.ts';
@@ -150,15 +153,49 @@ async function cmdSync(): Promise<void> {
   }
   try {
     const cfg = loadConfig();
-    const pricing = loadPricingWithOverrides(cfg.priceOverrides, fxRate(cfg));
+    const fx = fxRate(cfg);
+    const pricing = loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx);
     const { events, detected, parsedFiles, cachedFiles } = await collectCached(0);
-    const data = await buildDashboardData(events, cfg, pricing);
+
+    // 未知模型追踪：定价表+覆写都没有的，记账待补价
+    const seen = new Set<string>();
+    for (const e of events) {
+      if (seen.has(e.model)) continue;
+      seen.add(e.model);
+      if (!hasKnownPrice(e.model, pricing)) trackUnknown(e.model, e.agent);
+    }
+    // 每天最多一次自动查价补全
+    const fetched = await maybeAutoFetch(fx);
+    if (fetched.length > 0) {
+      console.log('自动补价（待核对）：');
+      for (const n of fetched) console.log(`  + ${n}`);
+    }
+
+    const data = await buildDashboardData(events, cfg, loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx));
     writeDashboardDataFile(data);
     console.log(`token-pilot sync · ${detected.length} 宿主 · 解析 ${parsedFiles} 文件 / 缓存命中 ${cachedFiles}`);
     console.log(`今日：¥${data.hero.today.costCny.toFixed(2)} · ${data.hero.today.calls} 次调用 · 托盘：${data.trayTitle}`);
   } finally {
     await releaseSyncLock();
   }
+}
+
+// 自动补价节流：每天最多一次（状态落盘，跨进程生效）
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { CONFIG_DIR } from '../core/config.ts';
+const FETCH_STATE = path.join(CONFIG_DIR, 'price-fetch-state.json');
+async function maybeAutoFetch(fx: number): Promise<string[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    if (existsSync(FETCH_STATE)) {
+      const s = JSON.parse(readFileSync(FETCH_STATE, 'utf8'));
+      if (s.lastRun === today) return [];
+    }
+  } catch { /* 重来 */ }
+  const notes = await autoFetchPrices(fx, 3);
+  try { writeFileSync(FETCH_STATE, JSON.stringify({ lastRun: today }), 'utf8'); } catch { /* 忽略 */ }
+  return notes;
 }
 
 async function cmdDash(): Promise<void> {
@@ -170,6 +207,37 @@ async function cmdDash(): Promise<void> {
   } catch { /* 手动打开 */ }
 }
 
+// 价格核对台：每个在用的模型当前按什么价算、价格从哪来
+function cmdPrices(): void {
+  const cfg = loadConfig();
+  const fx = fxRate(cfg);
+  const pricing = loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx);
+  const unknown = loadUnknown();
+
+  console.log('\ntoken-pilot · 价格核对台（¥ / 1M tokens）\n');
+  console.log('  模型'.padEnd(34) + '输入'.padStart(8) + '输出'.padStart(8) + '缓存读'.padStart(8) + '   来源');
+
+  const rows = new Set<string>([...Object.keys(pricing.models), ...Object.keys(unknown)]);
+  const lines: string[] = [];
+  for (const m of rows) {
+    const p = priceFor(m, pricing);
+    const inC = (p.input * fx).toFixed(2);
+    const outC = (p.output * fx).toFixed(2);
+    const crC = ((p.cacheRead ?? p.input * 0.1) * fx).toFixed(2);
+    let src = '目录价';
+    if (cfg.priceOverrides?.[m]) src = '人工覆写 ✓';
+    else if (unknown[m]?.autoPrice) src = `自动填充·待核对（${unknown[m].source ?? ''}）`;
+    else if (!hasKnownPrice(m)) src = '⚠️ 无定价，按 fallback 估';
+    lines.push(`  ${m.padEnd(32)}${inC.padStart(8)}${outC.padStart(8)}${crC.padStart(8)}   ${src}`);
+  }
+  lines.sort().forEach((l) => console.log(l));
+  const pending = Object.values(unknown).filter((u) => u.autoPrice && u.needsReview);
+  if (pending.length) {
+    console.log(`\n  ${pending.length} 个自动填充待核对 → 看板「数据设置」里可直接改`);
+  }
+  console.log('');
+}
+
 async function main() {
   const cmd = process.argv[2] ?? 'today';
   if (cmd === 'serve') {
@@ -179,6 +247,7 @@ async function main() {
   }
   if (cmd === 'sync') return cmdSync();
   if (cmd === 'dash') return cmdDash();
+  if (cmd === 'prices') return cmdPrices();
   if (cmd === 'today' || cmd === 'month' || cmd === 'report' || cmd === 'all') {
     return cmdReport(cmd === 'all' ? 'all' : cmd);
   }
