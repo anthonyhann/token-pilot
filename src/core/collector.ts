@@ -17,9 +17,10 @@ import { kimiCodeAdapter } from '../adapters/kimi-code.ts';
 import { opencodeAdapter } from '../adapters/opencode.ts';
 import { piAdapter } from '../adapters/pi.ts';
 import { volcArkAdapter } from '../adapters/volc-ark.ts';
+import { dshAdapter } from '../adapters/dsh.ts';
 import { CONFIG_DIR } from './config.ts';
 
-export const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCodeAdapter, opencodeAdapter, piAdapter, volcArkAdapter];
+export const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCodeAdapter, opencodeAdapter, piAdapter, volcArkAdapter, dshAdapter];
 
 export interface CollectResult {
   events: UsageEvent[];

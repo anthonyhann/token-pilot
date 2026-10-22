@@ -36,6 +36,8 @@ export const HOST_TIERS: Record<string, HostTierInfo> = {
   'kimi-code': { label: '一档', cls: 'tier-1' },
   'codex': { label: '一档', cls: 'tier-1' },
   'pi': { label: '一档', cls: 'tier-1' },
+  'dsh': { label: '一档', cls: 'tier-1' },
+  'volc-ark': { label: '四档', cls: 'tier-2' },
   'opencode': { label: '二档', cls: 'tier-2' },
   'qoder': { label: '无 token', cls: 'tier-0' },
 };
@@ -43,12 +45,13 @@ export const HOST_TIERS: Record<string, HostTierInfo> = {
 export async function buildAdapterTiers(cfg: TokenPilotConfig): Promise<AdapterTier[]> {
   // ---- 一档：本地日志直读 ----
   const claudeDir = path.join(HOME, '.claude', 'projects');
+  const dshDir = path.join(HOME, '.dsh', 'sessions');
   const kimiDir = path.join(HOME, '.kimi-code', 'sessions');
   const codexDir = path.join(HOME, '.codex', 'sessions');
   const piDir = path.join(HOME, '.pi');
 
-  const [hasClaude, hasKimi, hasCodex, hasPi] = await Promise.all([
-    exists(claudeDir), exists(kimiDir), exists(codexDir), exists(piDir),
+  const [hasClaude, hasKimi, hasCodex, hasPi, hasDsh] = await Promise.all([
+    exists(claudeDir), exists(kimiDir), exists(codexDir), exists(piDir), exists(dshDir),
   ]);
 
   const tier1: AdapterChip[] = [];
@@ -63,6 +66,10 @@ export async function buildAdapterTiers(cfg: TokenPilotConfig): Promise<AdapterT
   if (hasCodex) {
     const n = await countMatching(codexDir, (name, isDir) => !isDir && name.endsWith('.jsonl'));
     tier1.push({ name: 'Codex', status: 'on', hint: `${n} 个 rollout` });
+  }
+  if (hasDsh) {
+    const n = await countMatching(dshDir, (name, isDir) => !isDir && name === 'session.v4.jsonl.zstd');
+    tier1.push({ name: 'DeepSeek Harness', status: 'on', hint: `${n} 个会话（zstd）` });
   }
   if (hasPi) {
     const n = await countMatching(piDir, (name, isDir) => !isDir && name.endsWith('.jsonl'));

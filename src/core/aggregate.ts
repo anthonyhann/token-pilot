@@ -19,6 +19,8 @@ const AGENT_NAMES: Record<string, string> = {
   'opencode': 'OpenCode',
   'qoder': 'Qoder',
   'pi': 'pi',
+  'dsh': 'DeepSeek Harness',
+  'volc-ark': 'Doubao · 火山',
 };
 
 const PROVIDER_NAMES: Record<string, string> = {
