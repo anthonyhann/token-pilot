@@ -125,3 +125,16 @@ test('会话 spark 恒为 10 桶；活跃判定 2 分钟', async () => {
   const hot = d.live.sessions.find((s) => s.key.includes('hot'));
   assert.ok(hot?.active);
 });
+
+test('防重复计费：宿主日志已覆盖 doubao 的当天，云端日汇总被丢弃', async () => {
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const ts = today.getTime();
+  const hostEv = ev(1000, { agent: 'kimi-code', model: 'doubao-seed-2-1-pro', out: 100 });
+  hostEv.timestamp = ts;
+  const cloudEv = ev(1000, { agent: 'volc-ark', model: 'doubao-cloud', out: 5000, inp: 100000 });
+  cloudEv.timestamp = ts;
+  const d = await buildDashboardData([hostEv, cloudEv], {}, pricing);
+  // 只有宿主那条计入：云端那条被闸门丢弃
+  const tool = d.mix.today.tool.map((r) => r.name);
+  assert.ok(!tool.includes('Doubao · 火山'), '云端事件应与宿主去重');
+});

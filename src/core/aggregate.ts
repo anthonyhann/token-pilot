@@ -104,8 +104,25 @@ export async function buildDashboardData(
   const nowMs = now.getTime();
   const fx = fxRate(cfg);
 
+  // 防重复计费闸门：云端 API（volc-ark，账号级日汇总）与宿主日志可能报同一批流量。
+  // 规则：某天已有宿主日志记录到 doubao 系模型（provider=doubao 或模型名含 doubao/seed），
+  // 则当天的云端日汇总事件丢弃（宿主日志粒度更细，云端只补「非宿主通道」的部分）。
+  const hostDoubaoDays = new Set<string>();
+  for (const e of rawEvents) {
+    if (e.agent === 'volc-ark') continue;
+    const isDoubao = e.provider === 'doubao' || /doubao|seed/i.test(e.model);
+    if (isDoubao && e.timestamp > 0) {
+      hostDoubaoDays.add(new Date(e.timestamp).toISOString().slice(0, 10));
+    }
+  }
+  const filtered = rawEvents.filter((e) => {
+    if (e.agent !== 'volc-ark') return true;
+    const day = new Date(e.timestamp).toISOString().slice(0, 10);
+    return !hostDoubaoDays.has(day);
+  });
+
   // 排序 + 预算成本（单遍）
-  const events: Priced[] = rawEvents
+  const events: Priced[] = filtered
     .filter((e) => e.timestamp > 0)
     .map((e) => {
       const c = costOf(e.model, e.usage, pricing);

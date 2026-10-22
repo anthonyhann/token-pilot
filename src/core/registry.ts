@@ -114,6 +114,7 @@ export async function buildAdapterTiers(cfg: TokenPilotConfig): Promise<AdapterT
     ['Copilot', '.copilot'], ['Kilo', '.kilo'], ['Qwen Code', '.qwen'],
     ['Trae', '.trae'], ['Windsurf', '.windsurf'], ['ZCode', '.zcode'],
     ['Hermes', '.hermes'], ['Cline', '.cline'], ['Kimi (agents)', '.kimi'],
+    ['Zed', '.config/zed'], ['Ollama', '.ollama'],
   ];
   const tier5: AdapterChip[] = [];
   for (const [name, dir] of detectOnly) {
