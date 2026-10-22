@@ -20,6 +20,8 @@ const AGENT_NAMES: Record<string, string> = {
   'qoder': 'Qoder',
   'pi': 'pi',
   'dsh': 'DeepSeek Harness',
+  'workbuddy': 'WorkBuddy',
+  'workbuddy-ai': 'WorkBuddy AI',
   'volc-ark': 'Doubao · 火山',
 };
 

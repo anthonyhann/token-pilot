@@ -18,9 +18,10 @@ import { opencodeAdapter } from '../adapters/opencode.ts';
 import { piAdapter } from '../adapters/pi.ts';
 import { volcArkAdapter } from '../adapters/volc-ark.ts';
 import { dshAdapter } from '../adapters/dsh.ts';
+import { workbuddyAdapter, workbuddyAiAdapter } from '../adapters/workbuddy.ts';
 import { CONFIG_DIR } from './config.ts';
 
-export const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCodeAdapter, opencodeAdapter, piAdapter, volcArkAdapter, dshAdapter];
+export const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCodeAdapter, opencodeAdapter, piAdapter, volcArkAdapter, dshAdapter, workbuddyAdapter, workbuddyAiAdapter];
 
 export interface CollectResult {
   events: UsageEvent[];

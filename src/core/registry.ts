@@ -37,6 +37,8 @@ export const HOST_TIERS: Record<string, HostTierInfo> = {
   'codex': { label: '一档', cls: 'tier-1' },
   'pi': { label: '一档', cls: 'tier-1' },
   'dsh': { label: '一档', cls: 'tier-1' },
+  'workbuddy': { label: '一档', cls: 'tier-1' },
+  'workbuddy-ai': { label: '一档', cls: 'tier-1' },
   'volc-ark': { label: '四档', cls: 'tier-2' },
   'opencode': { label: '二档', cls: 'tier-2' },
   'qoder': { label: '无 token', cls: 'tier-0' },
@@ -66,6 +68,13 @@ export async function buildAdapterTiers(cfg: TokenPilotConfig): Promise<AdapterT
   if (hasCodex) {
     const n = await countMatching(codexDir, (name, isDir) => !isDir && name.endsWith('.jsonl'));
     tier1.push({ name: 'Codex', status: 'on', hint: `${n} 个 rollout` });
+  }
+  // WorkBuddy 双变体（traces 目录存在即接）
+  for (const [dir, name] of [[path.join(HOME, '.workbuddy', 'traces'), 'WorkBuddy'], [path.join(HOME, '.workbuddy-ai', 'traces'), 'WorkBuddy AI']] as const) {
+    if (await exists(dir)) {
+      const n = await countMatching(dir, (nm, isDir) => !isDir && nm.endsWith('.jsonl'));
+      tier1.push({ name, status: 'on', hint: `${n} 个 trace` });
+    }
   }
   if (hasDsh) {
     const n = await countMatching(dshDir, (name, isDir) => !isDir && name === 'session.v4.jsonl.zstd');

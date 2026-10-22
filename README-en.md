@@ -53,7 +53,7 @@ Grab `.dmg` (macOS Apple Silicon) or `.msi` (Windows x64) from [Releases](../../
 | Who's burning | see host/model/project ranks | which tool, which model, which project costs most |
 | Chinese models | nothing to configure | DeepSeek/GLM/Kimi/Qwen auto-normalized via host-log `model` field |
 
-**Works with your toolchain:** Claude Code ✅ · Codex ✅ · Kimi Code ✅ · OpenCode ✅ · pi ✅ (full tokens) · Doubao cloud ✅ (daily totals) · DeepSeek/GLM/Kimi/Qwen/MiniMax/Hunyuan/MiMo/LongCat/Doubao ✅ (model normalization) · 12 more detected-only · desktop subscription apps tracked as fixed monthly fees
+**Works with your toolchain:** Claude Code ✅ · Codex ✅ · Kimi Code ✅ · OpenCode ✅ · pi ✅ · DeepSeek Harness ✅ · WorkBuddy ✅ (full tokens) · Doubao cloud ✅ (daily totals) · DeepSeek/GLM/Kimi/Qwen/MiniMax/Hunyuan/MiMo/LongCat/Doubao ✅ (model normalization) · 12 more detected-only · desktop subscription apps tracked as fixed monthly fees
 
 ## 📈 Data accuracy
 
