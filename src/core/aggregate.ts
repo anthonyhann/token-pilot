@@ -809,6 +809,7 @@ function buildSettings(
     };
   });
   return {
+    autoCompact: cfg.autoCompact ?? { enabled: false },
     models,
     overrideNames: Object.keys(cfg.priceOverrides ?? {}),
     cloudApis: cfg.cloudApis ?? [],

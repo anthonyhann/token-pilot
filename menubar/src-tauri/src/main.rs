@@ -329,9 +329,24 @@ fn save_config(json: String) -> Result<(), String> {
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_else(|| serde_json::json!({}));
-    for k in ["monthlyBudgetCny", "priceOverrides", "cloudApis", "subscriptions"] {
+    for k in ["monthlyBudgetCny", "priceOverrides", "cloudApis", "subscriptions", "autoCompact"] {
         if let Some(v) = patch.get(k) {
             cur[k] = v.clone();
+        }
+    }
+    // 用户明示后写 Claude Code 的 autoCompactEnabled
+    if let Some(ac) = patch.get("autoCompact") {
+        if ac.get("applyClaudeCode").and_then(|v| v.as_bool()) == Some(true) {
+            let enabled = ac.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+            let cc = home_dir().join(".claude").join("settings.json");
+            let mut ccj: Value = fs::read_to_string(&cc)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
+            ccj["autoCompactEnabled"] = Value::Bool(enabled);
+            if let Ok(out) = serde_json::to_string_pretty(&ccj) {
+                let _ = fs::write(&cc, out + "\n");
+            }
         }
     }
     if let Some(dir) = cfg_path.parent() {

@@ -596,7 +596,7 @@ body.closed .reopen:hover{color:var(--fg)}
       var mx=Math.max.apply(null,spark.concat([0]));
       var bars=spark.map(function(v){var h=mx>0?(+v)/mx*100:0;return'<i style="height:'+Math.max(h,6)+'%"></i>'}).join("");
       return '<div class="sess-row"><span class="sess-dot"></span><div class="sess-main">'+
-        '<div class="sess-path">'+esc(s.label)+(s.needsCompact?' <span style="font-size:10px;font-weight:700;color:var(--warn)">⤓ 该压缩</span>':'')+'</div>'+
+        '<div class="sess-path">'+esc(s.label)+(s.needsCompact?' <span class="compact-badge" style="cursor:pointer;font-size:10px;font-weight:700;color:var(--warn)" title="点击复制 /compact 指令">⤓ 该压缩</span>':'')+'</div>'+
         '<div class="sess-meta num">'+esc(s.model)+' · 10 分钟输出 '+fmtInt(s.out10min)+'，'+esc(s.ago)+'</div></div>'+
         '<div class="sess-right"><span class="spark">'+bars+'</span><span class="sess-rate num">'+fmtTokS(s.rateTokS)+'</span></div></div>';
     }).join("");
@@ -658,6 +658,17 @@ body.closed .reopen:hover{color:var(--fg)}
   }
   for(var si=0;si<SOURCES.length;si++){if(startSource(SOURCES[si]))break}
 })();
+
+document.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('.compact-badge');
+  if(!b)return;
+  try{navigator.clipboard&&navigator.clipboard.writeText('/compact')}catch(x){}
+  var t=document.createElement('div');
+  t.textContent='已复制 /compact —— 到该会话窗口粘贴执行即可压缩（运行中的会话只能从宿主内部压缩）';
+  t.style.cssText='position:fixed;left:50%;bottom:36px;transform:translateX(-50%);background:oklch(0.25 0.015 265);color:oklch(0.96 0.005 265);font-size:12px;font-weight:600;padding:8px 16px;border-radius:10px;z-index:99;box-shadow:0 6px 24px oklch(0 0 0/.25)';
+  document.body.appendChild(t);
+  setTimeout(function(){t.remove()},2600);
+});
 </script>
 </body>
 </html>

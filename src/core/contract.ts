@@ -104,6 +104,7 @@ export interface SettingsModel {
 }
 
 export interface SettingsData {
+  autoCompact?: { enabled: boolean; thresholdTokens?: number; applyClaudeCode?: boolean };
   models: SettingsModel[];
   overrideNames: string[];   // 当前被人工覆写的模型名（弹窗 diff 保存用）
   cloudApis: { name: string; monthlyCny: number }[];

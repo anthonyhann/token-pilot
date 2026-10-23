@@ -23,6 +23,11 @@ export interface TokenPilotConfig {
   priceOverrides?: Record<string, PriceOverrideCny>;  // 设置弹窗的模型单价覆写（¥/M）
   cloudApis?: FixedFee[];       // 云端用量 API 固定月费
   subscriptions?: FixedFee[];   // 桌面端/会员订阅月费
+  autoCompact?: {
+    enabled: boolean;            // 自动压缩总开关（默认关）
+    thresholdTokens?: number;    // 触发阈值（默认 100K）
+    applyClaudeCode?: boolean;   // 是否写 Claude Code 的 autoCompactEnabled（改宿主配置，需用户明示）
+  };
 }
 
 export const CONFIG_DIR = path.join(os.homedir(), '.token-pilot');

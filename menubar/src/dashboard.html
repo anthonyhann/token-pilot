@@ -635,6 +635,21 @@ footer .notes{max-width:560px}
           <div class="m-lab">月度预算（¥）</div>
           <div class="m-row"><input id="mBudget" type="number" min="0" step="1" placeholder="不设置" aria-label="月度预算（¥）"></div>
         </div>
+        <div class="m-sec">
+          <div class="m-lab">自动压缩 <span>超阈值的活跃会话提醒/处理</span></div>
+          <div class="m-row" style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="mAutoCompact" aria-label="开启自动压缩" style="width:auto">
+            <label for="mAutoCompact" style="font-size:12px">开启（会话上下文超阈值时系统通知提醒）</label>
+          </div>
+          <div class="m-row" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <span style="font-size:12px;color:var(--muted);white-space:nowrap">阈值（K tokens）</span>
+            <input id="mCompactK" type="number" min="20" step="10" placeholder="100" aria-label="压缩阈值（千 tokens）" style="width:90px">
+          </div>
+          <div class="m-row" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <input type="checkbox" id="mApplyCc" aria-label="同时写入 Claude Code 自动压缩配置" style="width:auto">
+            <label for="mApplyCc" style="font-size:12px">同时写入 Claude Code 的 autoCompactEnabled（改宿主配置，影响新会话）</label>
+          </div>
+        </div>
       </div>
       <div class="modal-foot"><span class="saved-hint" id="saveHint">已保存</span><button class="btn-ghost" id="settingsSave" type="button">保存</button></div>
     </div>
@@ -787,7 +802,7 @@ function renderSessions(){
       spark='<span class="spark">'+s.spark.map(function(v){return '<i style="height:'+Math.max(mx?(+v||0)/mx*100:0,6)+'%"></i>'}).join("")+"</span>";
     }
     return '<div class="sess-row'+(s.active?"":" sess-idle")+'"><span class="sess-dot"></span>'+
-      '<div class="sess-main"><div class="sess-path">'+esc(s.label)+(s.needsCompact?' <span style="font-size:10.5px;font-weight:700;color:var(--warn);background:color-mix(in oklab,var(--warn) 12%,var(--tint));border-radius:6px;padding:1px 6px;vertical-align:1px">该压缩 '+fmtTok(s.ctxTokens||0)+'</span>':"")+'</div>'+
+      '<div class="sess-main"><div class="sess-path">'+esc(s.label)+(s.needsCompact?' <span class="compact-badge" style="cursor:pointer;font-size:10.5px;font-weight:700;color:var(--warn);background:color-mix(in oklab,var(--warn) 12%,var(--tint));border-radius:6px;padding:1px 6px;vertical-align:1px" title="点击复制 /compact 指令">该压缩 '+fmtTok(s.ctxTokens||0)+'</span>':"")+'</div>'+
       '<div class="sess-meta num">'+esc(s.model)+" · 10 分钟输出 "+(+s.out10min||0).toLocaleString("zh-CN")+" · "+esc(s.ago)+"</div></div>"+
       '<div class="sess-right">'+spark+'<span class="sess-rate num"'+(s.active?' style="color:var(--accent)"':"")+">"+(s.active?(+s.rateTokS||0).toFixed(1):"0")+" <em>tok/s</em></span></div></div>";
   }).join("");
@@ -946,7 +961,8 @@ function loadSettingsFromD(){
     models:(s.models||[]).map(function(m){return {n:String(m.name),i:String(m.inputCny),o:String(m.outputCny),c:String(m.cacheReadCny)}}),
     cloud:(s.cloudApis||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny)}}),
     subs:(s.subscriptions||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny)}}),
-    budget:s.monthlyBudgetCny==null?"":String(s.monthlyBudgetCny)
+    budget:s.monthlyBudgetCny==null?"":String(s.monthlyBudgetCny),
+    autoCompact:(s.autoCompact)||{enabled:false}
   };
 }
 function renderSet(){
@@ -954,6 +970,9 @@ function renderSet(){
   $("#mCloud").innerHTML=settings.cloud.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费用"><button class="delrow" type="button" data-del="cloud" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mSubs").innerHTML=settings.subs.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mBudget").value=settings.budget;
+  $("#mAutoCompact").checked=!!(settings.autoCompact&&settings.autoCompact.enabled);
+  $("#mCompactK").value=settings.autoCompact&&settings.autoCompact.thresholdTokens?String(Math.round(settings.autoCompact.thresholdTokens/1000)):"";
+  $("#mApplyCc").checked=!!(settings.autoCompact&&settings.autoCompact.applyClaudeCode);
 }
 function openModal(){loadSettingsFromD();settingsOrig=JSON.parse(JSON.stringify(settings.models));renderSet();modal.hidden=false;modal.classList.add("open");$("#modalClose").focus()}
 function closeModal(){modal.classList.remove("open");modal.hidden=true}
@@ -964,6 +983,9 @@ document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!modal.hidd
 modal.addEventListener("input",function(e){
   var t=e.target;
   if(t.id==="mBudget"){settings.budget=t.value;return}
+  if(t.id==="mAutoCompact"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.enabled=t.checked;return}
+  if(t.id==="mCompactK"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.thresholdTokens=(parseInt(t.value)||0)*1000;return}
+  if(t.id==="mApplyCc"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.applyClaudeCode=t.checked;return}
   var sec=t.closest("[data-set]");
   if(!sec||!t.dataset.k)return;
   settings[sec.dataset.set][+t.dataset.i][t.dataset.k]=t.value;
@@ -980,7 +1002,7 @@ $$(".addrow").forEach(function(b){
   });
 });
 $("#settingsSave").addEventListener("click",function(){
-  var payload={priceOverrides:{},cloudApis:[],subscriptions:[],monthlyBudgetCny:null};
+  var payload={priceOverrides:{},cloudApis:[],subscriptions:[],monthlyBudgetCny:null,autoCompact:settings.autoCompact||{enabled:false}};
   settings.models.forEach(function(r){
     if(!r.n)return;
     var orig=(settingsOrig||[]).find(function(x){return x.n===r.n});
@@ -1219,6 +1241,17 @@ async function boot(){
 boot();
 })();
 
+
+document.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('.compact-badge');
+  if(!b)return;
+  try{navigator.clipboard&&navigator.clipboard.writeText('/compact')}catch(x){}
+  var t=document.createElement('div');
+  t.textContent='已复制 /compact —— 到该会话窗口粘贴执行即可压缩（运行中的会话只能从宿主内部压缩）';
+  t.style.cssText='position:fixed;left:50%;bottom:36px;transform:translateX(-50%);background:oklch(0.25 0.015 265);color:oklch(0.96 0.005 265);font-size:12px;font-weight:600;padding:8px 16px;border-radius:10px;z-index:99;box-shadow:0 6px 24px oklch(0 0 0/.25)';
+  document.body.appendChild(t);
+  setTimeout(function(){t.remove()},2600);
+});
 </script>
 </body>
 </html>

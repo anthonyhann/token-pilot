@@ -18,6 +18,7 @@ import { buildDashboardData } from '../core/aggregate.ts';
 import { loadPricingWithOverrides } from '../core/pricing.ts';
 import { loadConfig, saveConfig, fxRate, monthlyBudgetCny, DATA_PATH, CONFIG_DIR } from '../core/config.ts';
 import { notify } from '../core/alert.ts';
+import { applyClaudeAutoCompact } from '../core/autocompact.ts';
 import type { DashboardData } from '../core/contract.ts';
 import type { TokenPilotConfig } from '../core/config.ts';
 
@@ -45,6 +46,7 @@ export interface ServeState {
   data: DashboardData | null;
   refreshing: boolean;
   lastAlertPct: number;
+  compactNotifiedAt?: Map<string, number>;
 }
 
 export async function refreshOnce(state: ServeState): Promise<DashboardData> {
@@ -62,6 +64,23 @@ export async function refreshOnce(state: ServeState): Promise<DashboardData> {
       notify('token-pilot 预算告警', `本月已用 ${pct.toFixed(0)}%（${data.budget.spentCny.toFixed(0)} / ${data.budget.monthlyCny.toFixed(0)} 元）`);
     }
     state.lastAlertPct = pct;
+  }
+
+  // 自动压缩提醒（开关开着时）：超阈值会话发系统通知，单会话 30min 冷却
+  const ac = cfg.autoCompact;
+  if (ac?.enabled && data.live.sessions.some((s) => s.needsCompact)) {
+    if (!state.compactNotifiedAt) state.compactNotifiedAt = new Map();
+    const threshold = ac.thresholdTokens ?? 100_000;
+    for (const s of data.live.sessions) {
+      if (!s.needsCompact) continue;
+      const last = state.compactNotifiedAt.get(s.key) ?? 0;
+      if (Date.now() - last < 30 * 60_000) continue;
+      state.compactNotifiedAt.set(s.key, Date.now());
+      notify(
+        'token-pilot · 该压缩上下文了',
+        `${s.agent} 会话上下文 ${Math.round((s.ctxTokens ?? threshold) / 1000)}K tokens，后续每轮都全量重发。到对应窗口跑 /compact 可立即降本。`,
+      );
+    }
   }
   return data;
 }
@@ -104,6 +123,15 @@ export async function serve(port = 17895): Promise<void> {
         const patch = JSON.parse(body) as Partial<TokenPilotConfig>;
         const cur = loadConfig();
         const next: TokenPilotConfig = { ...cur, ...patch };
+        // 用户明示后，写 Claude Code 的 autoCompactEnabled
+        if (next.autoCompact?.applyClaudeCode) {
+          const r = applyClaudeAutoCompact(next.autoCompact.enabled);
+          if (!r.ok) {
+            res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ ok: false, error: r.message }));
+            return;
+          }
+        }
         saveConfig(next);
         await refresh();
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
