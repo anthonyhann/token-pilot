@@ -1,8 +1,8 @@
 // 省钱建议 — 事后分析（不拦截、不代理），符合"少采集/本地化"原则
 // 逻辑：检测到贵模型在做轻量任务 → 建议换便宜模型，估算能省多少
 
-import type { UsageEvent } from './schema.ts';
-import { priceFor } from './pricing.ts';
+import type { UsageEvent } from './schema.js';
+import { priceFor } from './pricing.js';
 
 export interface SavingsAdvice {
   observation: string;

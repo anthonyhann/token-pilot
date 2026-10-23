@@ -4,8 +4,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { AdapterChip, AdapterTier } from './contract.ts';
-import type { TokenPilotConfig } from './config.ts';
+import type { AdapterChip, AdapterTier } from './contract.js';
+import type { TokenPilotConfig } from './config.js';
 
 const HOME = os.homedir();
 

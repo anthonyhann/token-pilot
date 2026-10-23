@@ -1,17 +1,17 @@
 // 聚合引擎 — 单遍扫描 UsageEvent[]，产出 DashboardData 契约全量
 // 原则：快计算（一次排序 + 一次主循环）、金额内部 USD、展示 CNY 由 fx 折算
 
-import type { UsageEvent } from './schema.ts';
+import type { UsageEvent } from './schema.js';
 import type {
   DashboardData, HeroPeriod, HeroPill, StatCard, DayPoint, MixRow, RankRow,
   LiveData, LiveSession, SavingsCard, SettingsData, AdapterTier,
-} from './contract.ts';
-import { costOf, cacheSavingsUsd, priceFor, type PricingTable } from './pricing.ts';
-import { fxRate, monthlyBudgetCny, type TokenPilotConfig } from './config.ts';
-import { detectRetryLoops } from './retry-detector.ts';
-import { savingsAdvice } from './savings.ts';
-import { computeCompression } from './compression.ts';
-import { buildAdapterTiers, HOST_TIERS } from './registry.ts';
+} from './contract.js';
+import { costOf, cacheSavingsUsd, priceFor, type PricingTable } from './pricing.js';
+import { fxRate, monthlyBudgetCny, type TokenPilotConfig } from './config.js';
+import { detectRetryLoops } from './retry-detector.js';
+import { savingsAdvice } from './savings.js';
+import { computeCompression } from './compression.js';
+import { buildAdapterTiers, HOST_TIERS } from './registry.js';
 
 const AGENT_NAMES: Record<string, string> = {
   'claude-code': 'Claude Code',
@@ -620,6 +620,7 @@ function buildLive(events: (UsageEvent & { _costUsd: number })[], sessMap: Map<s
     const spark = sessSpark.get(key) ?? new Array<number>(10).fill(0);
     sessions.push({
       key,
+      agent: s.agent,
       label: s.title ? `${s.label} · ${s.title}` : s.label,
       model: s.model,
       ctxTokens: s.lastCtx,
@@ -787,7 +788,7 @@ async function buildSettings(
   pricing: PricingTable,
   fx: number,
   d30: number,
-): SettingsData {
+): Promise<SettingsData> {
   // 近 30 天出现过的模型（按花费降序）∪ 用户覆写
   const costByModel = new Map<string, number>();
   for (const e of events) {
@@ -810,7 +811,7 @@ async function buildSettings(
   });
   return {
     autoCompact: cfg.autoCompact ?? { enabled: false },
-    rtkInstalled: await import('./rtk.ts').then((m) => m.rtkInstalled()).catch(() => false),
+    rtkInstalled: await import('./rtk.js').then((m) => m.rtkInstalled()).catch(() => false),
     models,
     overrideNames: Object.keys(cfg.priceOverrides ?? {}),
     cloudApis: cfg.cloudApis ?? [],

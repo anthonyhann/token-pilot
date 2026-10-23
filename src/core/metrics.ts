@@ -4,8 +4,8 @@
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { UsageEvent } from './schema.ts';
-import { costOf } from './pricing.ts';
+import type { UsageEvent } from './schema.js';
+import { costOf } from './pricing.js';
 
 const DATA_DIR = path.join(os.homedir(), '.token-pilot');
 const SUMMARY_PATH = path.join(DATA_DIR, 'metrics-summary.json');

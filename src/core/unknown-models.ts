@@ -4,7 +4,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { CONFIG_DIR } from './config.ts';
+import { CONFIG_DIR } from './config.js';
 
 const UNKNOWN_PATH = path.join(CONFIG_DIR, 'unknown-models.json');
 

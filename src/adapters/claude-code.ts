@@ -1,11 +1,11 @@
 // Claude Code adapter — 只读解析 ~/.claude/projects/**/*.jsonl
 // 参考 ccusage 路线：不注入 hook，不改配置，纯只读
 
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { UsageEvent, ContentEvent } from '../core/schema.ts';
-import type { Adapter } from './types.ts';
+import type { UsageEvent, ContentEvent } from '../core/schema.js';
+import type { Adapter } from './types.js';
 
 const HOME = os.homedir();
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
@@ -29,7 +29,7 @@ interface ClaudeLine {
 }
 
 async function* walkJsonl(dir: string): AsyncGenerator<string> {
-  let entries: fs.Dirent[];
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {

@@ -1,11 +1,11 @@
 // Kimi Code adapter — 只读解析 ~/.kimi-code/sessions/*/agents/main/wire.jsonl
 // 格式：wire.jsonl，usage 字段是 {inputOther, output, inputCacheRead, inputCacheCreation}
 
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { UsageEvent } from '../core/schema.ts';
-import type { Adapter } from './types.ts';
+import type { UsageEvent } from '../core/schema.js';
+import type { Adapter } from './types.js';
 
 const HOME = os.homedir();
 const SESSIONS_DIR = path.join(HOME, '.kimi-code', 'sessions');
@@ -25,7 +25,7 @@ interface KimiLine {
 }
 
 async function* walkJsonl(dir: string): AsyncGenerator<string> {
-  let entries: fs.Dirent[];
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {

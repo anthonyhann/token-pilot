@@ -3,8 +3,8 @@
 // 在每轮都被计费——把它们的「体积 × 存活轮数 × 单价」算出来，就是压缩能省的钱。
 // 红线：只用量尺寸，不读内容。
 
-import type { UsageEvent, ContentEvent } from './schema.ts';
-import { priceFor, type PricingTable } from './pricing.ts';
+import type { UsageEvent, ContentEvent } from './schema.js';
+import { priceFor, type PricingTable } from './pricing.js';
 
 export interface CompressionReport {
   potentialUsd: number;          // 口径A（保守：K=5 轮后压到 15%）

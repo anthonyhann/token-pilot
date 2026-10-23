@@ -4,8 +4,8 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { UsageEvent } from '../core/schema.ts';
-import type { Adapter } from './types.ts';
+import type { UsageEvent } from '../core/schema.js';
+import type { Adapter } from './types.js';
 
 const execFileP = promisify(execFile);
 

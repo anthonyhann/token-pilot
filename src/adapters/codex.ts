@@ -1,11 +1,11 @@
 // Codex adapter — 只读解析 ~/.codex/sessions/**/*.jsonl
 // 格式：rollout jsonl，token 在 type=token_usage_record 事件的 payload.usage
 
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { UsageEvent } from '../core/schema.ts';
-import type { Adapter } from './types.ts';
+import type { UsageEvent } from '../core/schema.js';
+import type { Adapter } from './types.js';
 
 const HOME = os.homedir();
 const SESSIONS_DIR = path.join(HOME, '.codex', 'sessions');
@@ -29,7 +29,7 @@ interface CodexLine {
 }
 
 async function* walkJsonl(dir: string): AsyncGenerator<string> {
-  let entries: fs.Dirent[];
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {

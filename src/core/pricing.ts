@@ -5,8 +5,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { UsageTokens, UsageCost } from './schema.ts';
-import type { PriceOverrideCny } from './config.ts';
+import type { UsageTokens, UsageCost } from './schema.js';
+import type { PriceOverrideCny } from './config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -44,8 +44,8 @@ export function loadPricingNormalized(usdToCny = 7.2): PricingTable {
   const base = loadPricing();
   const cvt = (t?: TierPrice): TierPrice | undefined =>
     t ? {
-      ...(t.input != null ? { input: t.input / usdToCny } : {}),
-      ...(t.output != null ? { output: t.output / usdToCny } : {}),
+      input: (t.input ?? 0) / usdToCny,
+      output: (t.output ?? 0) / usdToCny,
       ...(t.cacheRead != null ? { cacheRead: t.cacheRead / usdToCny } : {}),
       ...(t.cacheCreation != null ? { cacheCreation: t.cacheCreation / usdToCny } : {}),
     } : undefined;

@@ -6,8 +6,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { UsageEvent } from '../core/schema.ts';
-import type { Adapter } from './types.ts';
+import type { UsageEvent } from '../core/schema.js';
+import type { Adapter } from './types.js';
 
 const HOME = os.homedir();
 const DB_PATH = path.join(HOME, '.local', 'share', 'opencode', 'opencode.db');

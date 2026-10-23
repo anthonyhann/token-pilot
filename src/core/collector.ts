@@ -9,17 +9,17 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { UsageEvent, ContentEvent } from './schema.ts';
-import type { Adapter } from '../adapters/types.ts';
-import { claudeCodeAdapter } from '../adapters/claude-code.ts';
-import { codexAdapter } from '../adapters/codex.ts';
-import { kimiCodeAdapter } from '../adapters/kimi-code.ts';
-import { opencodeAdapter } from '../adapters/opencode.ts';
-import { piAdapter } from '../adapters/pi.ts';
-import { volcArkAdapter } from '../adapters/volc-ark.ts';
-import { dshAdapter } from '../adapters/dsh.ts';
-import { workbuddyAdapter, workbuddyAiAdapter } from '../adapters/workbuddy.ts';
-import { CONFIG_DIR } from './config.ts';
+import type { UsageEvent, ContentEvent } from './schema.js';
+import type { Adapter } from '../adapters/types.js';
+import { claudeCodeAdapter } from '../adapters/claude-code.js';
+import { codexAdapter } from '../adapters/codex.js';
+import { kimiCodeAdapter } from '../adapters/kimi-code.js';
+import { opencodeAdapter } from '../adapters/opencode.js';
+import { piAdapter } from '../adapters/pi.js';
+import { volcArkAdapter } from '../adapters/volc-ark.js';
+import { dshAdapter } from '../adapters/dsh.js';
+import { workbuddyAdapter, workbuddyAiAdapter } from '../adapters/workbuddy.js';
+import { CONFIG_DIR } from './config.js';
 
 export const ALL_ADAPTERS: Adapter[] = [claudeCodeAdapter, codexAdapter, kimiCodeAdapter, opencodeAdapter, piAdapter, volcArkAdapter, dshAdapter, workbuddyAdapter, workbuddyAiAdapter];
 
@@ -191,10 +191,10 @@ export class Collector {
     // 全量分支抢锁：CLI sync 在跑就让路，退化为增量，绝不叠加全量扫描
     if (wantFull && (await acquireSyncLock())) {
       try {
-        const { events, detected } = await collectCached(0);
+        const { events, contentEvents, detected } = await collectCached(0);
         this.byId = new Map(events.map((e) => [`${e.agent}:${e.eventId}`, e]));
         this.lastFull = now;
-        return { events, detected };
+        return { events, contentEvents, detected };
       } finally {
         await releaseSyncLock();
       }

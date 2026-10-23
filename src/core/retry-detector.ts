@@ -1,6 +1,6 @@
 // 异常重试/打转检测 — 识别"同一 session 反复重试、token 在烧但没产出"
 
-import type { UsageEvent } from './schema.ts';
+import type { UsageEvent } from './schema.js';
 
 export interface RetryAlert {
   sessionId: string;

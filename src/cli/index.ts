@@ -2,20 +2,20 @@
 // token-pilot CLI — 多宿主聚合
 // 命令：today | month | report | sync | dash | serve
 
-import { costOf, loadPricingWithOverrides } from '../core/pricing.ts';
-import { progressBar } from '../core/budget.ts';
-import { detectRetryLoops } from '../core/retry-detector.ts';
-import { savingsAdvice } from '../core/savings.ts';
-import { notify } from '../core/alert.ts';
-import { loadConfig, fxRate, monthlyBudgetCny } from '../core/config.ts';
-import { writeSummary } from '../core/metrics.ts';
-import { collectAll, collectCached, acquireSyncLock, releaseSyncLock } from '../core/collector.ts';
-import { hasKnownPrice, priceFor } from '../core/pricing.ts';
-import { trackUnknown, loadUnknown } from '../core/unknown-models.ts';
-import { autoFetchPrices, autoOverrides } from '../core/price-fetch.ts';
-import { buildDashboardData } from '../core/aggregate.ts';
-import { serve, bakeDashboard, writeDashboardDataFile } from './serve.ts';
-import type { UsageEvent } from '../core/schema.ts';
+import { costOf, loadPricingWithOverrides } from '../core/pricing.js';
+import { progressBar } from '../core/budget.js';
+import { detectRetryLoops } from '../core/retry-detector.js';
+import { savingsAdvice } from '../core/savings.js';
+import { notify } from '../core/alert.js';
+import { loadConfig, fxRate, monthlyBudgetCny } from '../core/config.js';
+import { writeSummary } from '../core/metrics.js';
+import { collectAll, collectCached, acquireSyncLock, releaseSyncLock } from '../core/collector.js';
+import { hasKnownPrice, priceFor } from '../core/pricing.js';
+import { trackUnknown, loadUnknown } from '../core/unknown-models.js';
+import { autoFetchPrices, autoOverrides } from '../core/price-fetch.js';
+import { buildDashboardData } from '../core/aggregate.js';
+import { serve, bakeDashboard, writeDashboardDataFile } from './serve.js';
+import type { UsageEvent } from '../core/schema.js';
 
 function startOfToday(): number {
   const d = new Date();
@@ -183,7 +183,7 @@ async function cmdSync(): Promise<void> {
 // 自动补价节流：每天最多一次（状态落盘，跨进程生效）
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { CONFIG_DIR } from '../core/config.ts';
+import { CONFIG_DIR } from '../core/config.js';
 const FETCH_STATE = path.join(CONFIG_DIR, 'price-fetch-state.json');
 async function maybeAutoFetch(fx: number): Promise<string[]> {
   const today = new Date().toISOString().slice(0, 10);
@@ -244,7 +244,7 @@ async function cmdCompressReport(): Promise<void> {
   const fx = fxRate(cfg);
   const pricing = loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx);
   const { events, contentEvents } = await collectCached(0);
-  const { computeCompression } = await import('../core/compression.ts');
+  const { computeCompression } = await import('../core/compression.js');
   const r = computeCompression(events, contentEvents, pricing);
   console.log('\ntoken-pilot · 压缩潜力报告（本月）\n');
   if (r.itemCount === 0) {
@@ -258,7 +258,7 @@ async function cmdCompressReport(): Promise<void> {
     console.log(`  ${s.agent} · ${s.key.slice(-16)} · $${s.wasteUsd.toFixed(2)} · ${s.items} 处 · ${s.topPatterns.join('/')}`);
   }
   // 2B：当前活跃会话里该 compact 的
-  const { buildDashboardData } = await import('../core/aggregate.ts');
+  const { buildDashboardData } = await import('../core/aggregate.js');
   const data = await buildDashboardData(events, cfg, pricing, contentEvents);
   const hot = data.live.sessions.filter((x) => x.needsCompact);
   if (hot.length) {

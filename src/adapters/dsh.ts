@@ -6,11 +6,11 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { UsageEvent } from '../core/schema.ts';
-import type { Adapter } from './types.ts';
+import type { UsageEvent } from '../core/schema.js';
+import type { Adapter } from './types.js';
 
 const execFileP = promisify(execFile);
 const HOME = os.homedir();
@@ -29,7 +29,7 @@ async function hasZstd(): Promise<boolean> {
 }
 
 async function* walkSessions(dir: string): AsyncGenerator<string> {
-  let entries: fs.Dirent[];
+  let entries: Dirent[];
   try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
   for (const e of entries) {
     const full = path.join(dir, e.name);

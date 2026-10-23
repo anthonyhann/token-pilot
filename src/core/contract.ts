@@ -51,6 +51,7 @@ export interface RankRow {
 
 export interface LiveSession {
   key: string;            // agent:sessionId
+  agent: string;          // 宿主 id
   label: string;          // '/项目路径 · 首条用户消息摘要' 或会话标识
   model: string;
   ctxTokens?: number;     // 最新一轮的上下文总量（input+cacheRead+cacheCreation）

@@ -3,11 +3,11 @@
 //   { models, totalInputTokens, totalOutputTokens, totalCachedTokens, callCount }
 // 口径：trace 级聚合（一个 trace = 一次 Agent 工作流），逐调用粒度不可得——如实标注。
 
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { UsageEvent } from '../core/schema.ts';
-import type { Adapter } from './types.ts';
+import type { UsageEvent } from '../core/schema.js';
+import type { Adapter } from './types.js';
 
 const HOME = os.homedir();
 const ROOTS: [string, string][] = [
@@ -34,7 +34,7 @@ interface WbLine {
 }
 
 async function* walkJsonl(dir: string): AsyncGenerator<string> {
-  let entries: fs.Dirent[];
+  let entries: Dirent[];
   try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
   for (const e of entries) {
     const full = path.join(dir, e.name);

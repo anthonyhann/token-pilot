@@ -1,7 +1,7 @@
 // Adapter 接口 — 声明式，学 LoongSuite Pilot 的 agents.d 思路
 // 加一个新宿主 = 加一个 adapter 文件，不改核心
 
-import type { UsageEvent, ContentEvent } from '../core/schema.ts';
+import type { UsageEvent, ContentEvent } from '../core/schema.js';
 
 export interface AdapterMeta {
   id: string;                  // 'claude-code'

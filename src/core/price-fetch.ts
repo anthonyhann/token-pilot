@@ -2,7 +2,7 @@
 // 策略：按 provider 找官方定价页 → r.jina.ai 读成文本 → 在模型名附近抓价格数字
 // 所有自动填充都标记 needsReview，人工可在看板「数据设置」里核对修改。
 
-import { loadUnknown, markPriced, markFailed, saveUnknown, type UnknownModel } from './unknown-models.ts';
+import { loadUnknown, markPriced, markFailed, saveUnknown, type UnknownModel } from './unknown-models.js';
 
 const PROVIDER_PRICE_PAGES: Record<string, string> = {
   anthropic: 'https://claude.com/pricing#api',
