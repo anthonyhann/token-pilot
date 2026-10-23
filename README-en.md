@@ -42,7 +42,14 @@ token-pilot month     # month bill + forecast + retry-loop detection + savings a
 
 Grab `.dmg` (macOS Apple Silicon) or `.msi` (Windows x64) from [Releases](../../releases). After install it lives **only in the menubar** — no Dock icon, no startup window. Left-click opens the panel, right-click opens the menu.
 
-> Unsigned: on macOS right-click → Open; on Windows SmartScreen → "Run anyway". Build it yourself: `cd menubar && npm install && npx tauri build`
+> Unsigned: on macOS right-click → Open; on Windows SmartScreen → "Run anyway".
+
+**macOS "damaged, can't open" error?** That's Gatekeeper quarantining the unsigned app. One-time fix:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/token-pilot.app
+```
+ Build it yourself: `cd menubar && npm install && npx tauri build`
 
 ## ✨ What it does
 
