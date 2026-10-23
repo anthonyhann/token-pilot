@@ -162,7 +162,7 @@ export async function buildDashboardData(
   const speedByDay = new Map<number, number[]>();
 
   // 会话（实时 + 命中率优化共用）
-  interface Sess { agent: string; model: string; lastTs: number; out10: number; out60: number; spark: number[]; calls: number; cacheRead: number; cacheCreation: number; input: number; costUsd: number; label: string; title?: string; firstTs: number }
+  interface Sess { agent: string; model: string; lastTs: number; lastCtx: number; out10: number; out60: number; spark: number[]; calls: number; cacheRead: number; cacheCreation: number; input: number; costUsd: number; label: string; title?: string; firstTs: number }
   const sessMap = new Map<string, Sess>();
 
   const cell = (map: Map<string, Cell>, key: string, e: Priced): Cell => {
@@ -234,10 +234,11 @@ export async function buildDashboardData(
     if (ts >= d7) {
       let s = sessMap.get(sk);
       if (!s) {
-        s = { agent: e.agent, model: e.model, lastTs: 0, out10: 0, out60: 0, spark: [], calls: 0, cacheRead: 0, cacheCreation: 0, input: 0, costUsd: 0, label: projKey(e), title: e.sessionTitle, firstTs: ts };
+        s = { agent: e.agent, model: e.model, lastTs: 0, lastCtx: 0, out10: 0, out60: 0, spark: [], calls: 0, cacheRead: 0, cacheCreation: 0, input: 0, costUsd: 0, label: projKey(e), title: e.sessionTitle, firstTs: ts };
         sessMap.set(sk, s);
       }
       s.lastTs = Math.max(s.lastTs, ts);
+      s.lastCtx = u.inputTokens + u.cacheReadTokens + u.cacheCreationTokens;
       s.calls++; s.costUsd += cost;
       s.cacheRead += u.cacheReadTokens; s.cacheCreation += u.cacheCreationTokens; s.input += u.inputTokens;
       if (!s.title && e.sessionTitle) s.title = e.sessionTitle;
@@ -470,6 +471,20 @@ export async function buildDashboardData(
     });
   }
 
+  // ---------- 2B：该 compact 了（活跃会话上下文超阈值） ----------
+  const COMPACT_AT = 100_000;
+  const needCompact = live.sessions.filter((s) => s.needsCompact);
+  if (needCompact.length > 0) {
+    const biggest = needCompact.sort((a, b) => (b.ctxTokens ?? 0) - (a.ctxTokens ?? 0))[0];
+    savings.push({
+      kind: 'info',
+      icon: 'route',
+      title: '该 compact 了',
+      desc: `${needCompact.length} 个活跃会话上下文超 ${Math.round(COMPACT_AT / 1000)}K tokens（最大 ${fmtTok(biggest.ctxTokens ?? 0)}），后续每轮都全量重发。在宿主里跑 /compact 可立即降本。`,
+      amount: `${needCompact.length} 个会话`,
+    });
+  }
+
   // ---------- 适配器状态 ----------
   const adapters: AdapterTier[] = await buildAdapterTiers(cfg);
 
@@ -523,7 +538,7 @@ function projKey(e: UsageEvent): string {
 // （上限 120s 防长停顿稀释），总量不变，速率曲线回到真实形状。
 const MAX_SPAN_MS = 120_000;
 
-function buildLive(events: (UsageEvent & { _costUsd: number })[], sessMap: Map<string, { agent: string; model: string; lastTs: number; label: string; title?: string }>, nowMs: number): LiveData {
+function buildLive(events: (UsageEvent & { _costUsd: number })[], sessMap: Map<string, { agent: string; model: string; lastTs: number; lastCtx: number; label: string; title?: string }>, nowMs: number): LiveData {
   const BUCKET = 20_000;
   const N60 = 180; // 60 分钟
   const outB = new Array<number>(N60).fill(0);
@@ -607,6 +622,8 @@ function buildLive(events: (UsageEvent & { _costUsd: number })[], sessMap: Map<s
       key,
       label: s.title ? `${s.label} · ${s.title}` : s.label,
       model: s.model,
+      ctxTokens: s.lastCtx,
+      needsCompact: s.lastCtx > 100_000,
       active,
       ago: agoLabel(s.lastTs, nowMs),
       out10min: out10,

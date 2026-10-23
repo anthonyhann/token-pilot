@@ -787,7 +787,7 @@ function renderSessions(){
       spark='<span class="spark">'+s.spark.map(function(v){return '<i style="height:'+Math.max(mx?(+v||0)/mx*100:0,6)+'%"></i>'}).join("")+"</span>";
     }
     return '<div class="sess-row'+(s.active?"":" sess-idle")+'"><span class="sess-dot"></span>'+
-      '<div class="sess-main"><div class="sess-path">'+esc(s.label)+'</div>'+
+      '<div class="sess-main"><div class="sess-path">'+esc(s.label)+(s.needsCompact?' <span style="font-size:10.5px;font-weight:700;color:var(--warn);background:color-mix(in oklab,var(--warn) 12%,var(--tint));border-radius:6px;padding:1px 6px;vertical-align:1px">该压缩 '+fmtTok(s.ctxTokens||0)+'</span>':"")+'</div>'+
       '<div class="sess-meta num">'+esc(s.model)+" · 10 分钟输出 "+(+s.out10min||0).toLocaleString("zh-CN")+" · "+esc(s.ago)+"</div></div>"+
       '<div class="sess-right">'+spark+'<span class="sess-rate num"'+(s.active?' style="color:var(--accent)"':"")+">"+(s.active?(+s.rateTokS||0).toFixed(1):"0")+" <em>tok/s</em></span></div></div>";
   }).join("");

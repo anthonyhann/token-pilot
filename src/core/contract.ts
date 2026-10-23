@@ -53,6 +53,8 @@ export interface LiveSession {
   key: string;            // agent:sessionId
   label: string;          // '/项目路径 · 首条用户消息摘要' 或会话标识
   model: string;
+  ctxTokens?: number;     // 最新一轮的上下文总量（input+cacheRead+cacheCreation）
+  needsCompact?: boolean; // 上下文超阈值，建议压缩
   active: boolean;        // 2 分钟内有事件
   ago: string;            // '刚刚' / '8 分钟前' / '10月13日'
   out10min: number;       // 近 10 分钟输出 tokens

@@ -596,7 +596,7 @@ body.closed .reopen:hover{color:var(--fg)}
       var mx=Math.max.apply(null,spark.concat([0]));
       var bars=spark.map(function(v){var h=mx>0?(+v)/mx*100:0;return'<i style="height:'+Math.max(h,6)+'%"></i>'}).join("");
       return '<div class="sess-row"><span class="sess-dot"></span><div class="sess-main">'+
-        '<div class="sess-path">'+esc(s.label)+'</div>'+
+        '<div class="sess-path">'+esc(s.label)+(s.needsCompact?' <span style="font-size:10px;font-weight:700;color:var(--warn)">⤓ 该压缩</span>':'')+'</div>'+
         '<div class="sess-meta num">'+esc(s.model)+' · 10 分钟输出 '+fmtInt(s.out10min)+'，'+esc(s.ago)+'</div></div>'+
         '<div class="sess-right"><span class="spark">'+bars+'</span><span class="sess-rate num">'+fmtTokS(s.rateTokS)+'</span></div></div>';
     }).join("");

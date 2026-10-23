@@ -138,3 +138,16 @@ test('防重复计费：宿主日志已覆盖 doubao 的当天，云端日汇总
   const tool = d.mix.today.tool.map((r) => r.name);
   assert.ok(!tool.includes('Doubao · 火山'), '云端事件应与宿主去重');
 });
+
+test('2B：上下文超 100K 的活跃会话标 needsCompact 并进建议卡', async () => {
+  const big = ev(30_000, { sessionId: 'big-ctx' });
+  big.usage.inputTokens = 150_000; big.usage.cacheReadTokens = 0; big.usage.totalTokens = 150_050;
+  big.usage.cacheCreationTokens = 0;
+  const small = ev(20_000, { sessionId: 'small-ctx' });
+  const d = await buildDashboardData([big, small], {}, pricing);
+  const bigS = d.live.sessions.find((s) => s.key.includes('big-ctx'));
+  const smallS = d.live.sessions.find((s) => s.key.includes('small-ctx'));
+  assert.ok(bigS?.needsCompact, '大会话应标记');
+  assert.ok(!smallS?.needsCompact, '小会话不标');
+  assert.ok(d.savings.some((c) => c.title === '该 compact 了'), '建议卡应出现');
+});

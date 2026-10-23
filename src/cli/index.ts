@@ -257,6 +257,16 @@ async function cmdCompressReport(): Promise<void> {
   for (const s of r.sessions) {
     console.log(`  ${s.agent} · ${s.key.slice(-16)} · $${s.wasteUsd.toFixed(2)} · ${s.items} 处 · ${s.topPatterns.join('/')}`);
   }
+  // 2B：当前活跃会话里该 compact 的
+  const { buildDashboardData } = await import('../core/aggregate.ts');
+  const data = await buildDashboardData(events, cfg, pricing, contentEvents);
+  const hot = data.live.sessions.filter((x) => x.needsCompact);
+  if (hot.length) {
+    console.log('\n当前该压缩的活跃会话（上下文 >100K，继续在烧）：');
+    for (const x of hot) {
+      console.log(`  ${x.agent} · ${x.label.slice(0, 40)} · 上下文 ${Math.round((x.ctxTokens ?? 0) / 1000)}K → 跑 /compact`);
+    }
+  }
   console.log('\n建议：上下文压缩代理可把这部分省下来（规则法已验证 −29%~−48% 输入）。');
   console.log('');
 }
