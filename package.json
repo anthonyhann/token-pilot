@@ -1,7 +1,7 @@
 {
   "name": "@anthonyhan/token-pilot",
-  "version": "0.2.4",
-  "description": "\u4f60\u6240\u6709 AI \u5de5\u5177\u7684\u672c\u5730\u8d26\u5355 + \u9884\u7b97\u63a7\u5236\u5668 \u2014 \u53ea\u8bfb\u672c\u5730\u65e5\u5fd7\uff0c\u96f6\u5165\u4fb5\uff0c\u4e0d\u51fa\u672c\u673a",
+  "version": "0.2.5",
+  "description": "你所有 AI 工具的本地账单 + 预算控制器 — 只读本地日志，零入侵，不出本机",
   "type": "module",
   "bin": {
     "token-pilot": "./bin/token-pilot.js"
