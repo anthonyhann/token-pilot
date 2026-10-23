@@ -53,7 +53,7 @@ Grab `.dmg` (macOS Apple Silicon) or `.msi` (Windows x64) from [Releases](../../
 | Who's burning | see host/model/project ranks | which tool, which model, which project costs most |
 | Chinese models | nothing to configure | DeepSeek/GLM/Kimi/Qwen auto-normalized via host-log `model` field |
 
-**Works with your toolchain:** Claude Code ✅ · Codex ✅ · Kimi Code ✅ · OpenCode ✅ · pi ✅ · DeepSeek Harness ✅ · WorkBuddy ✅ (full tokens) · Doubao cloud ✅ (daily totals) · DeepSeek/GLM/Kimi/Qwen/MiniMax/Hunyuan/MiMo/LongCat/Doubao ✅ (model normalization) · 12 more detected-only · desktop subscription apps tracked as fixed monthly fees
+**Works with your toolchain:** Claude Code ✅ · Codex ✅ · Kimi Code ✅ · OpenCode ✅ · pi ✅ · DeepSeek Harness ✅ · WorkBuddy ✅ · Doubao cloud ✅ · DeepSeek/GLM/Kimi/Qwen/MiniMax/Hunyuan/MiMo/LongCat/Doubao ✅ (model normalization) · 12 more detected-only · desktop subscription apps tracked as fixed monthly fees
 
 ## 📈 Data accuracy
 
@@ -107,7 +107,9 @@ A solo dev + a few AI agents running product experiments (remote, Xi'an). token-
 - [ ] Cloud usage APIs: OpenAI / Moonshot (user-provided API key)
 
 **Throttling (step 2)**
-- [x] 2A Compression potential measurement (rule engine: stale/reread/long outputs)
+- [x] 2A Compression potential measurement
+- [x] 2B layer 1: auto-compact alerts + Claude autoCompact + one-click RTK install
+- [ ] 2B layer 2: proxy gateway (LiteLLM/self-built)
 - [ ] 2B Compression execution (integrate Gobstopper-style proxy first)
 - [ ] Cheap-model routing (optional local proxy — never touches your config by default)
 - [ ] Proactive retry-loop breaker notifications

@@ -10,7 +10,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](#-状态栏应用)
-[![Tests](https://img.shields.io/badge/tests-32%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](tests/)
 [![Accuracy](https://img.shields.io/badge/对账脚本-逐项一致-blue)](#-数据准确性)
 
 [快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [TODO](#-todo-list) · [English](README-en.md) · [llms.txt](llms.txt)
@@ -50,6 +50,8 @@ token-pilot month     # 本月账单 + 月底预测 + 打转检测 + 省钱建�
 | 怕超支 | 设个月度预算 | 进度条 + 超支系统通知 + 托盘常驻 `¥今日 · 预算%` |
 | Agent 打转 | 不用说话 | 自动揪出「单会话 ≥30 次调用」的死循环，算出浪费金额 |
 | 想省钱 | 看「省钱建议」卡 | 贵模型干轻活 → 迁移建议+每月省多少；低缓存命中 → 优化空间；本月缓存帮你省了多少 |
+| 上下文太长 | 自动提醒 / 点徽标 | 会话超 100K 上下文标记「该压缩」，可写 Claude Code autoCompact / 一键装 RTK 输出压缩层 |
+| 核对价格 | `token-pilot prices` | 每个在用模型的单价来源（目录价/人工覆写/自动补价待核对） |
 | 谁在烧 | 看「宿主/模型/项目榜」 | 哪个工具、哪个模型、哪个项目花最多，一目了然 |
 | 国产模型 | 不用配置 | DeepSeek/GLM/Kimi/Qwen 走宿主日志 model 字段自动归一 |
 
@@ -62,7 +64,7 @@ token-pilot month     # 本月账单 + 月底预测 + 打转检测 + 省钱建�
 ```bash
 python3 scripts/reconcile.py month    # 第三方视角独立重算原始日志，与 CLI 逐项对账
 python3 scripts/verify-dashboard.py   # 看板 36 项算法不变量校验
-npm test                              # 32 个单元测试（定价/采集口径/聚合/注入）
+npm test                              # 40 个单元测试（定价/采集口径/聚合/注入）
 ```
 
 实测修过的口径坑（2026-10-21，本机 4787 个日志文件）：
@@ -119,7 +121,8 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 
 **节流（Step 2）**
 - [x] 2A 压缩潜力量化（规则引擎：陈旧输出/重复读取/超长输出 → 本月可省多少，实测 $63-95）
-- [ ] 2B 压缩执行（先对接 Gobstopper 类代理，视数据再定自研）
+- [x] 2B 压缩执行第一层：自动压缩提醒 + Claude autoCompact 写入 + RTK 一键安装
+- [ ] 2B 压缩执行第二层：代理网关（LiteLLM/自研，视数据再定）
 - [ ] 低价模型路由（本地代理层，可选开启，默认不动你任何配置）
 - [ ] 异常重试自动熔断提醒（已有检测，加主动通知策略）
 
