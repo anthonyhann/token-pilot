@@ -27,6 +27,7 @@ export interface TokenPilotConfig {
     enabled: boolean;            // 自动压缩总开关（默认关）
     thresholdTokens?: number;    // 触发阈值（默认 100K）
     applyClaudeCode?: boolean;   // 是否写 Claude Code 的 autoCompactEnabled（改宿主配置，需用户明示）
+    installRtk?: boolean;        // 是否安装 RTK 输出压缩层（用户勾选才装）
   };
 }
 

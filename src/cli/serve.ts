@@ -19,6 +19,7 @@ import { loadPricingWithOverrides } from '../core/pricing.ts';
 import { loadConfig, saveConfig, fxRate, monthlyBudgetCny, DATA_PATH, CONFIG_DIR } from '../core/config.ts';
 import { notify } from '../core/alert.ts';
 import { applyClaudeAutoCompact } from '../core/autocompact.ts';
+import { installRtk, uninstallRtk, rtkInstalled } from '../core/rtk.ts';
 import type { DashboardData } from '../core/contract.ts';
 import type { TokenPilotConfig } from '../core/config.ts';
 
@@ -130,6 +131,20 @@ export async function serve(port = 17895): Promise<void> {
             res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ ok: false, error: r.message }));
             return;
+          }
+        }
+        // RTK 安装层：勾选且未装 → 装；取消勾选且已装 → 卸
+        if (next.autoCompact && typeof next.autoCompact.installRtk === 'boolean') {
+          const installed = await rtkInstalled();
+          if (next.autoCompact.installRtk && !installed) {
+            const r = await installRtk();
+            if (!r.ok) {
+              res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ ok: false, error: r.message }));
+              return;
+            }
+          } else if (!next.autoCompact.installRtk && installed) {
+            await uninstallRtk();
           }
         }
         saveConfig(next);

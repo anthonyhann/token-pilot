@@ -649,6 +649,10 @@ footer .notes{max-width:560px}
             <input type="checkbox" id="mApplyCc" aria-label="同时写入 Claude Code 自动压缩配置" style="width:auto">
             <label for="mApplyCc" style="font-size:12px">同时写入 Claude Code 的 autoCompactEnabled（改宿主配置，影响新会话）</label>
           </div>
+          <div class="m-row" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <input type="checkbox" id="mInstallRtk" aria-label="安装 RTK 输出压缩层" style="width:auto">
+            <label for="mInstallRtk" style="font-size:12px">安装 RTK 输出压缩层（rtk-oss 纯 Apache，brew/winget）<span id="rtkStatus" style="color:var(--muted);margin-left:6px"></span></label>
+          </div>
         </div>
       </div>
       <div class="modal-foot"><span class="saved-hint" id="saveHint">已保存</span><button class="btn-ghost" id="settingsSave" type="button">保存</button></div>
@@ -971,8 +975,12 @@ function renderSet(){
   $("#mSubs").innerHTML=settings.subs.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mBudget").value=settings.budget;
   $("#mAutoCompact").checked=!!(settings.autoCompact&&settings.autoCompact.enabled);
-  $("#mCompactK").value=settings.autoCompact&&settings.autoCompact.thresholdTokens?String(Math.round(settings.autoCompact.thresholdTokens/1000)):"";
+  $("#mCompactK").value=String(Math.round((settings.autoCompact&&settings.autoCompact.thresholdTokens)||100000/1000)||100);
   $("#mApplyCc").checked=!!(settings.autoCompact&&settings.autoCompact.applyClaudeCode);
+  var rtkOn=!!(D&&D.settings&&D.settings.rtkInstalled);
+  $("#mInstallRtk").checked=rtkOn||!!(settings.autoCompact&&settings.autoCompact.installRtk);
+  $("#rtkStatus").textContent=rtkOn?"（已安装 v"+""+"）":"";
+  $("#rtkStatus").textContent=rtkOn?"（已安装）":"";
 }
 function openModal(){loadSettingsFromD();settingsOrig=JSON.parse(JSON.stringify(settings.models));renderSet();modal.hidden=false;modal.classList.add("open");$("#modalClose").focus()}
 function closeModal(){modal.classList.remove("open");modal.hidden=true}
@@ -986,6 +994,7 @@ modal.addEventListener("input",function(e){
   if(t.id==="mAutoCompact"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.enabled=t.checked;return}
   if(t.id==="mCompactK"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.thresholdTokens=(parseInt(t.value)||0)*1000;return}
   if(t.id==="mApplyCc"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.applyClaudeCode=t.checked;return}
+  if(t.id==="mInstallRtk"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.installRtk=t.checked;return}
   var sec=t.closest("[data-set]");
   if(!sec||!t.dataset.k)return;
   settings[sec.dataset.set][+t.dataset.i][t.dataset.k]=t.value;
@@ -1002,7 +1011,7 @@ $$(".addrow").forEach(function(b){
   });
 });
 $("#settingsSave").addEventListener("click",function(){
-  var payload={priceOverrides:{},cloudApis:[],subscriptions:[],monthlyBudgetCny:null,autoCompact:settings.autoCompact||{enabled:false}};
+  var payload={priceOverrides:{},cloudApis:[],subscriptions:[],monthlyBudgetCny:null,autoCompact:settings.autoCompact||{enabled:false}};payload.autoCompact.thresholdTokens=payload.autoCompact.thresholdTokens||100000;
   settings.models.forEach(function(r){
     if(!r.n)return;
     var orig=(settingsOrig||[]).find(function(x){return x.n===r.n});

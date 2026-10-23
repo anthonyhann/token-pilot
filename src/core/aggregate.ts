@@ -489,7 +489,7 @@ export async function buildDashboardData(
   const adapters: AdapterTier[] = await buildAdapterTiers(cfg);
 
   // ---------- 设置 ----------
-  const settings = buildSettings(events, cfg, pricing, fx, d30);
+  const settings = await buildSettings(events, cfg, pricing, fx, d30);
 
   // ---------- 托盘 ----------
   const trayTitle = budget
@@ -781,7 +781,7 @@ function buildSavings(
 }
 
 // ---------- 设置 ----------
-function buildSettings(
+async function buildSettings(
   events: UsageEvent[],
   cfg: TokenPilotConfig,
   pricing: PricingTable,
@@ -810,6 +810,7 @@ function buildSettings(
   });
   return {
     autoCompact: cfg.autoCompact ?? { enabled: false },
+    rtkInstalled: await import('./rtk.ts').then((m) => m.rtkInstalled()).catch(() => false),
     models,
     overrideNames: Object.keys(cfg.priceOverrides ?? {}),
     cloudApis: cfg.cloudApis ?? [],
