@@ -40,7 +40,13 @@ token-pilot month     # month bill + forecast + retry-loop detection + savings a
 
 ### Menubar App
 
-Grab `.dmg` (macOS Apple Silicon) or `.msi` (Windows x64) from [Releases](../../releases). After install it lives **only in the menubar** — no Dock icon, no startup window. Left-click opens the panel, right-click opens the menu.
+**Recommended — Homebrew (handles Gatekeeper for you)**:
+
+```bash
+brew install --cask anthonyhann/token-pilot/token-pilot
+```
+
+Or grab `.dmg` / `.msi` manually from [Releases](../../releases). After install it lives **only in the menubar** — no Dock icon, no startup window. Left-click opens the panel, right-click opens the menu.
 
 > Unsigned: on macOS right-click → Open; on Windows SmartScreen → "Run anyway".
 

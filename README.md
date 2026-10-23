@@ -40,7 +40,13 @@ token-pilot month     # 本月账单 + 月底预测 + 打转检测 + 省钱建�
 
 ### 状态栏应用
 
-[Releases](../../releases) 下载 `.dmg`（macOS Apple Silicon）/ `.msi`（Windows x64）。安装启动后**只在状态栏显示一个闪电图标**——无 Dock 图标、无启动窗口；左键弹面板，右键出菜单。
+**推荐 Homebrew（自动处理 Gatekeeper，装完即用）**：
+
+```bash
+brew install --cask anthonyhann/token-pilot/token-pilot
+```
+
+或 [Releases](../../releases) 手动下载 `.dmg`（Apple Silicon/Intel）/ `.msi`（Windows x64）。安装启动后**只在状态栏显示一个闪电图标**——无 Dock 图标、无启动窗口；左键弹面板，右键出菜单。
 
 > 未签名：macOS 首次打开需右键 → 打开；Windows SmartScreen 选「仍要运行」。
 
