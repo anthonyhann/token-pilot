@@ -40,22 +40,23 @@ token-pilot month     # month bill + forecast + retry-loop detection + savings a
 
 ### Menubar App
 
-**Recommended — Homebrew (handles Gatekeeper for you)**:
+After install it lives **only in the menubar** — no Dock icon, no startup window. Left-click opens the panel, right-click the menu.
+
+**macOS (Apple Silicon / Intel)**:
 
 ```bash
+# Option 1: Homebrew (recommended — handles Gatekeeper for you)
 brew install --cask anthonyhann/token-pilot/token-pilot
 ```
 
-Or grab `.dmg` / `.msi` manually from [Releases](../../releases). After install it lives **only in the menubar** — no Dock icon, no startup window. Left-click opens the panel, right-click opens the menu.
-
-> Unsigned: on macOS right-click → Open; on Windows SmartScreen → "Run anyway".
-
-**macOS "damaged, can't open" error?** That's Gatekeeper quarantining the unsigned app. One-time fix:
-
 ```bash
+# Option 2: grab the .dmg from Releases, drag to Applications, then once (fixes the unsigned "damaged" dialog):
 xattr -dr com.apple.quarantine /Applications/token-pilot.app
 ```
- Build it yourself: `cd menubar && npm install && npx tauri build`
+
+**Windows**: grab the `.msi`, SmartScreen → "Run anyway".
+
+Build it yourself: `cd menubar && npm install && npx tauri build`
 
 ## ✨ What it does
 

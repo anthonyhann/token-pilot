@@ -40,23 +40,24 @@ token-pilot month     # 本月账单 + 月底预测 + 打转检测 + 省钱建�
 
 ### 状态栏应用
 
-**推荐 Homebrew（自动处理 Gatekeeper，装完即用）**：
+安装启动后**只在状态栏显示一个闪电图标**——无 Dock 图标、无启动窗口；左键弹面板，右键出菜单。
+
+**macOS（Apple Silicon / Intel）**：
 
 ```bash
+# 方式一：Homebrew（推荐，自动处理 Gatekeeper，装完即用）
 brew install --cask anthonyhann/token-pilot/token-pilot
 ```
 
-或 [Releases](../../releases) 手动下载 `.dmg`（Apple Silicon/Intel）/ `.msi`（Windows x64）。安装启动后**只在状态栏显示一个闪电图标**——无 Dock 图标、无启动窗口；左键弹面板，右键出菜单。
-
-> 未签名：macOS 首次打开需右键 → 打开；Windows SmartScreen 选「仍要运行」。
-
-**macOS 首次打开如果报「已损坏，无法打开」**：这是未签名应用 + Gatekeeper 隔离的误伤，跑一次即可永久解决：
-
 ```bash
+# 方式二：Releases 手动下载 .dmg，拖入「应用程序」后跑一次（解决未签名的「已损坏」误报）
 xattr -dr com.apple.quarantine /Applications/token-pilot.app
 ```
 
+**Windows**：Releases 下载 `.msi`，SmartScreen 选「仍要运行」。
+
 > 长期解：Apple 开发者签名+公证（$99/年）在 TODO 里，有赞助再开。
+
 自己构建：`cd menubar && npm install && npx tauri build`
 
 ## ✨ 它能做什么
