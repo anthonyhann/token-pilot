@@ -23,18 +23,20 @@ For anyone running Claude Code / Codex / Kimi Code with Chinese models (DeepSeek
 
 > Lives in your menubar as `⚡ ¥today · budget%`. Left-click for the panel, "Open dashboard" for the full picture. My real October: **810M tokens · ¥2,546 · 12,685 calls** ([how we know](#-data-accuracy)).
 
+> ⚠️ **注意**：npm 上的 \`token-pilot\` 是别人的同名包（MCP 代码导航工具，会往 Claude Code 写 hooks）。**我们的包叫 \`@anthonyhann/token-pilot\`**，别装错：
+
 ## 🚀 Quickstart
 
 **For Humans:**
 
 ```bash
-npm install -g token-pilot
+npm install -g @anthonyhann/token-pilot
 token-pilot month     # month bill + forecast + retry-loop detection + savings advice
 ```
 
 **For AI Agents:** (paste this to your agent)
 
-> Install token-pilot for me: `npm install -g token-pilot`, then run `token-pilot month` and tell me how much I spent on AI this month and where I'm wasting it.
+> Install token-pilot for me: `npm install -g @anthonyhann/token-pilot`, then run `token-pilot month` and tell me how much I spent on AI this month and where I'm wasting it.
 
 ### Menubar App
 

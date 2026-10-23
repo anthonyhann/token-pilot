@@ -1,5 +1,5 @@
 {
-  "name": "token-pilot",
+  "name": "@anthonyhann/token-pilot",
   "version": "0.2.3",
   "description": "你所有 AI 工具的本地账单 + 预算控制器 — 只读本地日志，零入侵，不出本机",
   "type": "module",
@@ -16,5 +16,8 @@
     "node": ">=18"
   },
   "license": "MIT",
-  "dependencies": {}
+  "dependencies": {},
+  "publishConfig": {
+    "access": "public"
+  }
 }
