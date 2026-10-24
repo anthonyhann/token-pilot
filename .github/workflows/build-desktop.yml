@@ -56,6 +56,46 @@ jobs:
       - name: Build bundles
         run: cargo tauri build --target ${{ matrix.target }}
         working-directory: menubar
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
+      - name: Assemble updater manifest (latest.json)
+        shell: bash
+        working-directory: menubar
+        run: |
+          set -e
+          B=src-tauri/target/${{ matrix.target }}/release/bundle
+          APP_TGZ=$(ls $B/macos/*.app.tar.gz 2>/dev/null || true)
+          MSI=$(ls $B/msi/*.msi 2>/dev/null | head -1 || true)
+          VER=$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])" 2>/dev/null || node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
+          PLAT=""
+          if [ -n "$APP_TGZ" ]; then
+            SIG=$(cat "$APP_TGZ.sig")
+            case "${{ matrix.target }}" in
+              aarch64-apple-darwin) PLAT=darwin-aarch64 ;;
+              x86_64-apple-darwin) PLAT=darwin-x86_64 ;;
+            esac
+            F=$(basename "$APP_TGZ")
+          elif [ -n "$MSI" ]; then
+            SIG=$(cat "$MSI.sig")
+            PLAT=windows-x86_64
+            F=$(basename "$MSI")
+          fi
+          if [ -n "$PLAT" ]; then
+            cat > "$B/latest.json" <<JSON
+          {
+            "version": "v$VER",
+            "notes": "token-pilot v$VER",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "$PLAT": {
+                "signature": "$SIG",
+                "url": "https://github.com/anthonyhann/token-pilot/releases/download/v$VER/$F"
+              }
+            }
+          }
+          JSON
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -63,6 +103,9 @@ jobs:
           name: token-pilot-${{ matrix.target }}
           path: |
             menubar/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.sig
             menubar/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
+            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.sig
+            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/**/latest.json
           if-no-files-found: ignore

@@ -12,6 +12,7 @@ import { writeSummary } from '../core/metrics.js';
 import { collectAll, collectCached, acquireSyncLock, releaseSyncLock } from '../core/collector.js';
 import { hasKnownPrice, priceFor } from '../core/pricing.js';
 import { trackUnknown, loadUnknown } from '../core/unknown-models.js';
+import { notifyRetryLoops } from '../core/breaker.js';
 import { autoFetchPrices, autoOverrides } from '../core/price-fetch.js';
 import { buildDashboardData } from '../core/aggregate.js';
 import { serve, bakeDashboard, writeDashboardDataFile } from './serve.js';
@@ -170,6 +171,13 @@ async function cmdSync(): Promise<void> {
       console.log('自动补价（待核对）：');
       for (const n of fetched) console.log(`  + ${n}`);
     }
+
+    // 打转熔断通知（菜单栏 sync 路径）
+    try {
+      const weekAgo = Date.now() - 7 * 86400_000;
+      const alerts = detectRetryLoops(events.filter((e) => e.timestamp >= weekAgo), (m, u) => costOf(m, u, pricing), { minCallsPerSession: 30, minCostUsd: 0.3 });
+      notifyRetryLoops(alerts);
+    } catch { /* 不阻塞 */ }
 
     const data = await buildDashboardData(events, cfg, loadPricingWithOverrides({ ...autoOverrides(), ...(cfg.priceOverrides ?? {}) }, fx), contentEvents);
     writeDashboardDataFile(data);

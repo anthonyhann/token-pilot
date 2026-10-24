@@ -51,6 +51,16 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIwOTMxRjkyRTM2Q0VDMkMKUldRczdHempraCtUc1BHT3BINEd1eGc0VnpPNmJIVi9BakNja2M0cElsME1rNUN6bUlsRU9qTmMK",
+      "endpoints": [
+        "https://github.com/anthonyhann/token-pilot/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

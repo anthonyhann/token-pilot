@@ -359,9 +359,31 @@ fn save_config(json: String) -> Result<(), String> {
     Ok(())
 }
 
+
+/// 检查更新：有新版就下载安装并重启（updater 插件验签）；失败静默
+fn check_update(app: &tauri::AppHandle) {
+    let app_h = app.clone();
+    tauri::async_runtime::spawn(async move {
+        use tauri_plugin_updater::UpdaterExt;
+        let updater = app_h.updater();
+        if let Ok(updater) = updater {
+            match updater.check().await {
+                Ok(Some(update)) => {
+                    let _ = update
+                        .download_and_install(|_c, _l| {}, || {})
+                        .await;
+                    app_h.restart();
+                }
+                _ => {}
+            }
+        }
+    });
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![get_data, hide_panel, open_dashboard, save_config])
         .setup(|app| {
             // macOS：Accessory 模式 = 无 Dock 图标、无菜单栏应用菜单，纯状态栏驻留
@@ -378,8 +400,9 @@ fn main() {
             let title_i = MenuItem::with_id(app, "title", &title_txt, false, None::<&str>)?;
             let panel_i = MenuItem::with_id(app, "open-panel", "打开面板", true, None::<&str>)?;
             let dash_i = MenuItem::with_id(app, "open-dashboard", "打开看板", true, None::<&str>)?;
+            let upd_i = MenuItem::with_id(app, "check-update", "检查更新", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&title_i, &panel_i, &dash_i, &quit_i])?;
+            let menu = Menu::with_items(app, &[&title_i, &panel_i, &dash_i, &upd_i, &quit_i])?;
 
             // 托盘图标分平台：macOS 用单色模板（深浅菜单栏自适应）；
             // Windows 用彩色版（纯黑闪电在深色任务栏上会隐形），template 语义仅 macOS 有效
@@ -404,6 +427,7 @@ fn main() {
                     "quit" => app.exit(0),
                     "open-panel" => show_panel(app),
                     "open-dashboard" => open_dashboard_impl(app),
+                    "check-update" => check_update(app),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -424,6 +448,19 @@ fn main() {
                 update_tray(&tray, &title_i, v);
             }
             let _ = TRAY_REFS.set((tray.clone(), title_i.clone()));
+
+            // 自动更新：启动 10s 后查一次，之后每 6h
+            {
+                let app_h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(10));
+                    check_update(&app_h);
+                    loop {
+                        std::thread::sleep(Duration::from_secs(6 * 3600));
+                        check_update(&app_h);
+                    }
+                });
+            }
 
             // 托盘刷新：5s 轻量 tick（只 stat mtime），文件一变立刻刷新；
             // 数据超过 45s 未更新 → 后台 sync（有单飞锁，不堆积），sync 完成回调里再立刻刷一次

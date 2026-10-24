@@ -19,6 +19,9 @@ import { loadPricingWithOverrides } from '../core/pricing.js';
 import { loadConfig, saveConfig, fxRate, monthlyBudgetCny, DATA_PATH, CONFIG_DIR } from '../core/config.js';
 import { notify } from '../core/alert.js';
 import { applyClaudeAutoCompact } from '../core/autocompact.js';
+import { costOf } from '../core/pricing.js';
+import { detectRetryLoops } from '../core/retry-detector.js';
+import { notifyRetryLoops } from '../core/breaker.js';
 import { installRtk, uninstallRtk, rtkInstalled } from '../core/rtk.js';
 import type { DashboardData } from '../core/contract.js';
 import type { TokenPilotConfig } from '../core/config.js';
@@ -66,6 +69,14 @@ export async function refreshOnce(state: ServeState): Promise<DashboardData> {
     }
     state.lastAlertPct = pct;
   }
+
+  // 打转熔断：近 7 天检测到打转就主动通知（每会话每天一次）
+  try {
+    const weekAgo = Date.now() - 7 * 86400_000;
+    const weekEvents = (await state.collector.sync()).events.filter((e) => e.timestamp >= weekAgo);
+    const alerts = detectRetryLoops(weekEvents, (m, u) => costOf(m, u, pricing), { minCallsPerSession: 30, minCostUsd: 0.3 });
+    notifyRetryLoops(alerts);
+  } catch { /* 不阻塞 */ }
 
   // 自动压缩提醒（开关开着时）：超阈值会话发系统通知，单会话 30min 冷却
   const ac = cfg.autoCompact;
