@@ -35,8 +35,10 @@ export interface RetryAlertLike {
 export function notifyRetryLoops(alerts: RetryAlertLike[], now = Date.now()): number {
   if (alerts.length === 0) return 0;
   const state = load();
+  // 每次最多通知 1 个（最严重的）：首次运行不清历史账，防通知轰炸
+  const sorted = [...alerts].sort((a, b) => b.totalCostUsd - a.totalCostUsd);
   let sent = 0;
-  for (const a of alerts) {
+  for (const a of sorted) {
     const key = `${a.agent}:${a.sessionId}`;
     const last = state.sessions[key] ?? 0;
     if (now - last < COOLDOWN_MS) continue;
@@ -46,7 +48,13 @@ export function notifyRetryLoops(alerts: RetryAlertLike[], now = Date.now()): nu
       `${a.agent} 一个会话重复调用 ${a.calls} 次（烧 ¥${(a.totalCostUsd * 7.2).toFixed(0)}），疑似死循环，建议人工介入。`,
     );
     sent++;
+    break; // 最多 1 个
   }
-  if (sent > 0) save(state);
+  // 冷却外的其余会话也标记为已通知（不清历史账）
+  for (const a of sorted) {
+    const key = `${a.agent}:${a.sessionId}`;
+    if (!state.sessions[key]) state.sessions[key] = now;
+  }
+  save(state);
   return sent;
 }

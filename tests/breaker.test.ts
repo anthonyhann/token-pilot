@@ -2,11 +2,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, existsSync, rmSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { notifyRetryLoops } from '../src/core/breaker.ts';
 
 const STATE = '/Users/hanqiang/.token-pilot/alerted-sessions.json';
-const bak = existsSync(STATE) ? JSON.parse(require('node:fs').readFileSync(STATE, 'utf8')) : null;
+const bak = existsSync(STATE) ? JSON.parse(readFileSync(STATE, 'utf8')) : null;
 
 test('同一会话当天只通知一次', () => {
   const alerts = [{ sessionId: 'test-sess-1', agent: 'claude-code', model: 'm', calls: 50, totalCostUsd: 2 }];
@@ -16,13 +16,15 @@ test('同一会话当天只通知一次', () => {
   assert.equal(second, 0, '冷却期内不再重复通知');
 });
 
-test('不同会话各自计冷却', () => {
+test('每次最多通知 1 个（防轰炸），其余标记不再提', () => {
   const alerts = [
-    { sessionId: 'test-sess-1', agent: 'claude-code', model: 'm', calls: 50, totalCostUsd: 2 },
-    { sessionId: 'test-sess-2', agent: 'codex', model: 'm', calls: 60, totalCostUsd: 3 },
+    { sessionId: 'test-sess-3', agent: 'codex', model: 'm', calls: 60, totalCostUsd: 3 },
+    { sessionId: 'test-sess-4', agent: 'codex', model: 'm', calls: 50, totalCostUsd: 2 },
   ];
   const n = notifyRetryLoops(alerts);
-  assert.equal(n, 1, 'sess-1 冷却中，sess-2 应新通知');
+  assert.equal(n, 1, '只通知最贵的那个');
+  const again = notifyRetryLoops(alerts);
+  assert.equal(again, 0, '其余会话也已标记，不重复');
 });
 
 test.after(() => {
