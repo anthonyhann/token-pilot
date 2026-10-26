@@ -23,20 +23,20 @@
 
 > 状态栏常驻 `⚡ ¥今日 · 预算%`。左键弹面板，「打开完整看板」看全部。我的真实 10 月：**810M tokens · ¥2,546 · 12,685 次调用**（[怎么算的](#-数据准确性)）。
 
-> ⚠️ **注意**：npm 上的 \`token-pilot\` 是别人的同名包（MCP 代码导航工具，会往 Claude Code 写 hooks）。**我们的包叫 \`@anthonyhan/token-pilot\`**，别装错：
+> ⚠️ **注意**：npm 上有个**同名的别人家包** `token-pilot`（MCP 代码导航工具，会往 Claude Code 写 hooks）。我们的包是 scoped 版 **`@anthonyhann/token-pilot`**，下面命令里都带 scope，照抄即可，别装成无 scope 的那个。
 
 ## 🚀 快速开始
 
 **For Humans：**
 
 ```bash
-npm install -g @anthonyhan/token-pilot
+npm install -g @anthonyhann/token-pilot
 token-pilot month     # 本月账单 + 月底预测 + 打转检测 + 省钱建议
 ```
 
 **For AI Agents：**（把这句粘贴给你的 Agent）
 
-> 帮我安装 token-pilot：`npm install -g @anthonyhan/token-pilot`，然后跑 `token-pilot month` 告诉我这个月 AI 花了多少钱、哪里在浪费。
+> 帮我安装 token-pilot：`npm install -g @anthonyhann/token-pilot`，然后跑 `token-pilot month` 告诉我这个月 AI 花了多少钱、哪里在浪费。
 
 ### 状态栏应用
 

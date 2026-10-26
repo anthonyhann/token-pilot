@@ -1,6 +1,6 @@
 {
-  "name": "@anthonyhan/token-pilot",
-  "version": "0.2.6",
+  "name": "@anthonyhann/token-pilot",
+  "version": "0.2.7",
   "description": "你所有 AI 工具的本地账单 + 预算控制器 — 只读本地日志，零入侵，不出本机",
   "type": "module",
   "bin": {
@@ -9,6 +9,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "sync:assets": "node scripts/sync-web-assets.js",
+    "verify:assets": "node scripts/sync-web-assets.js --check",
     "today": "npx tsx src/cli/index.ts today",
     "test": "npx tsx --test tests/*.test.ts",
     "prepublishOnly": "npm run build"

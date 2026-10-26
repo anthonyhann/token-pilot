@@ -48,6 +48,10 @@ jobs:
       - name: Install tauri-cli
         run: cargo install tauri-cli --version "^2" --locked
 
+      - name: 校验打包资源与 web/ 源一致（防发出旧前端）
+        run: node scripts/sync-web-assets.js --check
+        working-directory: .
+
       - name: Clean stale bundle artifacts（防缓存带旧版本包）
         shell: bash
         run: rm -rf src-tauri/target/*/release/bundle src-tauri/target/release/bundle

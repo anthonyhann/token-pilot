@@ -7,7 +7,7 @@
 用户说「帮我装 token-pilot」时执行：
 
 ```bash
-npm install -g @anthonyhan/token-pilot
+npm install -g @anthonyhann/token-pilot
 token-pilot month
 ```
 
