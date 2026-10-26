@@ -171,13 +171,22 @@ jobs:
           notes = f'token-pilot v{ver}'
           cl = 'RELEASE_NOTES.md'
           if os.path.exists(cl):
+              # 只认行首的 '## vX.Y.Z' 标题：文件头里也写了 '## v0.2.7' 之类的示例，
+              # 用裸字符串 split 会抽到那段说明而不是真正的发布段落
+              import re
               txt = open(cl, encoding='utf-8').read()
-              marker = f'## v{ver}'
-              if marker in txt:
-                  body = txt.split(marker, 1)[1]
-                  body = body.split('\n## v', 1)[0].strip()
-                  if body:
-                      notes = body
+              pat = rf'^## v{re.escape(ver)}\s*$'
+              m = re.search(pat, txt, re.M)
+              if not m:
+                  sys.exit(f'::error::RELEASE_NOTES.md 里找不到「## v{ver}」段落')
+              rest = txt[m.end():]
+              nxt = re.search(r'^## v\S+\s*$', rest, re.M)
+              body = (rest[:nxt.start()] if nxt else rest).strip().strip('-').strip()
+              if body:
+                  notes = body
+              else:
+                  sys.exit(f'::error::RELEASE_NOTES.md 的「## v{ver}」段落是空的')
+          # 只检查真正会被客户端展示的正文
           if '构建中' in notes:
               sys.exit('::error::notes 里残留「构建中」字样')
           out = {
