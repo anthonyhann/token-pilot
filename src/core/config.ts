@@ -31,7 +31,10 @@ export interface TokenPilotConfig {
   };
 }
 
-export const CONFIG_DIR = path.join(os.homedir(), '.token-pilot');
+// 状态目录：测试用 TOKEN_PILOT_HOME 隔离到临时目录，避免碰用户真实数据
+export const CONFIG_DIR = process.env.TOKEN_PILOT_HOME
+  ? path.resolve(process.env.TOKEN_PILOT_HOME)
+  : path.join(os.homedir(), '.token-pilot');
 export const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 export const DATA_PATH = path.join(CONFIG_DIR, 'dashboard-data.json');
 

@@ -10,7 +10,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](#-状态栏应用)
-[![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-42%20passing-brightgreen)](tests/)
 [![Accuracy](https://img.shields.io/badge/对账脚本-逐项一致-blue)](#-数据准确性)
 
 [快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [TODO](#-todo-list) · [English](README-en.md) · [llms.txt](llms.txt)
@@ -82,7 +82,7 @@ xattr -dr com.apple.quarantine /Applications/token-pilot.app
 ```bash
 python3 scripts/reconcile.py month    # 第三方视角独立重算原始日志，与 CLI 逐项对账
 python3 scripts/verify-dashboard.py   # 看板 36 项算法不变量校验
-npm test                              # 40 个单元测试（定价/采集口径/聚合/注入）
+npm test                              # 42 个单元测试（定价/采集口径/聚合/注入/熔断）
 ```
 
 实测修过的口径坑（2026-10-21，本机 4787 个日志文件）：
@@ -96,7 +96,7 @@ npm test                              # 40 个单元测试（定价/采集口径
 ## 📊 凭什么信我
 
 - 我自己的 AI 账单就是它管的：本月 **¥2,546 / 810M tokens**（2026-10-21，上方截图即本机实时数据）
-- 36 项看板算法不变量 + 22 个单测 + 独立对账脚本，全部开箱可跑
+- 36 项看板算法不变量 + 42 个单测 + 独立对账脚本，全部开箱可跑
 - 诚实披露速率口径：日志按「调用完成时刻」记账，生成中的调用完成前不计入（看板内有注明）
 
 ## ⚠️ 什么时候别用它
@@ -125,7 +125,14 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 
 ## 📝 更新日志
 
-- **2026-10-21** v0.1.0：首版 → CLI 账单 + 本地看板 + macOS/Windows 状态栏应用，三形态一次给齐
+完整分版本说明见 [RELEASE_NOTES.md](RELEASE_NOTES.md)（也是客户端自动更新弹窗的文案来源）。
+
+- **v0.2.6** 激活自动更新链路 + 打转熔断主动通知（含防轰炸）
+- **v0.2.5** npm scope 校正为 `@anthonyhann`，包可运行性修复
+- **v0.2.3** 2B 压缩执行第一层（自动压缩 + autoCompact 写入 + RTK）、价格核对台
+- **v0.2.1** 定价表对齐 8 家官方目录价、DeepSeek 分时、面板布局修复
+- **v0.2.0** 压缩潜力量化、9 源采集覆盖、三处口径修复
+- **v0.1.0** 首版 → CLI 账单 + 本地看板 + macOS/Windows 状态栏应用，三形态一次给齐
 
 ## ✅ TODO LIST
 
@@ -140,16 +147,17 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 **节流（Step 2）**
 - [x] 2A 压缩潜力量化（规则引擎：陈旧输出/重复读取/超长输出 → 本月可省多少，实测 $63-95）
 - [x] 2B 压缩执行第一层：自动压缩提醒 + Claude autoCompact 写入 + RTK 一键安装
+- [x] 异常重试自动熔断提醒（`breaker.ts`：单会话 ≥30 次调用即主动通知，每轮最多提 1 个防首跑轰炸）
 - [ ] 2B 压缩执行第二层：代理网关（LiteLLM/自研，视数据再定）
 - [ ] 低价模型路由（本地代理层，可选开启，默认不动你任何配置）
-- [ ] 异常重试自动熔断提醒（已有检测，加主动通知策略）
 
 **平台与工程**
-- [x] macOS 状态栏应用（arm64 .app/.dmg）
-- [x] Windows 核查 + 分平台图标 + CI
-- [ ] Windows .msi 实机验证（Actions 产物）
-- [ ] Intel Mac 包（universal2）
-- [ ] 自动更新（tauri-updater）
+- [x] macOS 状态栏应用（arm64 + Intel x64 双架构 .app/.dmg）
+- [x] Windows 核查 + 分平台图标 + CI（`.msi` 由 Actions 产出）
+- [x] 自动更新（tauri-updater，v0.2.6 起生效，三平台共用一份 `latest.json`）
+- [x] CI 自动发布：打 tag 后三平台产物 + 合并版 `latest.json` 自动进 Release，并回写 brew cask
+- [ ] Windows `.msi` 实机安装验证（目前只验证到 Actions 产物层）
+- [ ] 统一二进制（universal2 单包替代 arm64/x64 两个 dmg）
 - [ ] 签名与公证（Apple Developer $99/年，有赞助再开）
 
 ## English
