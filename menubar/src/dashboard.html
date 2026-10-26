@@ -225,7 +225,7 @@ svg{display:block}
 .tier-2{color:var(--info-text);background:color-mix(in oklab, var(--info) 13%, var(--tint))}
 .tier-0{color:oklch(0.4 0.01 275);background:oklch(0.94 0.004 85)}
 
-.save-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px}
+.save-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:4px}
 .save-card{border:1px solid var(--border);border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:7px;transition:box-shadow .15s var(--ease), transform .15s var(--ease)}
 .save-card:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
 .save-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -234,6 +234,27 @@ svg{display:block}
 .save-amt{font-size:15px;font-weight:800;color:var(--pos);background:color-mix(in oklab, var(--pos) 12%, var(--tint));border-radius:8px;padding:2px 9px}
 .save-amt.warn{color:var(--warn);background:color-mix(in oklab, var(--warn) 10%, var(--tint))}
 .save-amt.info{color:var(--info);background:color-mix(in oklab, var(--info) 11%, var(--tint))}
+
+/* 压缩潜力：总额条 + 模式拆分 + 最浪费会话 */
+.cmp-bar{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.cmp-big{font-size:30px;font-weight:800;letter-spacing:-.02em;color:var(--pos)}
+.cmp-big small{font-size:15px;font-weight:700;color:var(--pos);opacity:.75}
+.cmp-sub{color:var(--muted);font-size:12.5px}
+.cmp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.cmp-card{border:1px solid var(--border);border-radius:12px;padding:11px 13px;background:var(--surface)}
+.cmp-card .cmp-k{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.cmp-card .cmp-v{font-size:17px;font-weight:800;margin-top:5px}
+.cmp-card .cmp-p{font-size:11.5px;color:var(--muted);margin-top:3px}
+.cmp-track{height:6px;border-radius:999px;background:var(--border);overflow:hidden;display:flex;gap:2px;margin:0 0 16px}
+.cmp-track i{display:block;height:100%;border-radius:999px}
+.cmp-list{display:flex;flex-direction:column;gap:8px}
+.cmp-row{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.cmp-row .cmp-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono,inherit)}
+.cmp-row .cmp-c{font-weight:700;color:var(--warn);white-space:nowrap}
+.cmp-row .cmp-t{color:var(--muted);white-space:nowrap;font-size:11.5px}
+.cmp-empty{color:var(--muted);font-size:13px;padding:6px 0}
+.cmp-note{color:var(--muted);font-size:11.5px;margin-top:12px;line-height:1.6}
+@media (max-width:1020px){.cmp-grid{grid-template-columns:1fr}}
 
 .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .chipbtn{border:1px solid var(--border);border-radius:999px;padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--muted);background:var(--surface);transition:all .15s var(--ease)}
@@ -538,6 +559,14 @@ footer .notes{max-width:560px}
         <div class="save-desc num">1 个会话命中率仅 41%，稳定系统提示词并复用会话可恢复到 95% 水平。</div>
       </div>
     </div>
+  </section>
+
+  <section class="sec acc-green full-only" data-od-id="compression" style="margin-top:16px">
+    <div class="sec-head">
+      <h2 class="sec-title"><span class="icon-chip ic-green"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 12h13M4 17h7"/><path d="M17 15l3 3 3-3" transform="translate(-1 0)"/></svg></span>压缩潜力</h2>
+      <span class="sec-note">本月 · 规则法估算，压缩后可省区间</span>
+    </div>
+    <div id="cmpBody"><div class="cmp-empty">本月暂无明显可压缩的上下文浪费。</div></div>
   </section>
 
   <section class="sec acc-blue full-only" data-od-id="adapters" style="margin-top:16px">
@@ -1068,11 +1097,75 @@ var SAVEICON={
   cache:'<span class="icon-chip ic-green"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/></svg></span>'
 };
 function renderSavings(){
-  var arr=D.savings||[];
-  document.querySelector('[data-od-id="savings"] .save-grid').innerHTML=arr.slice(0,3).map(function(s){
+  var arr=(D.savings||[]).slice();
+  // 不再按位置硬截断 3 张：可行动项（warn/info，如「该 compact 了」）优先保住，
+  // 纯信息项（pos）排在后面。否则新增一张卡就会把它后面那张静默挤掉。
+  var rank=function(s){return s.kind==="warn"?0:s.kind==="info"?1:2};
+  arr=arr.map(function(s,i){return {s:s,i:i}}).sort(function(a,b){
+    var d=rank(a.s)-rank(b.s); return d!==0?d:a.i-b.i;
+  }).map(function(x){return x.s});
+  document.querySelector('[data-od-id="savings"] .save-grid').innerHTML=arr.slice(0,4).map(function(s){
     var cls=s.kind==="warn"?" warn":s.kind==="info"?" info":"";
     return '<div class="save-card"><div class="save-top"><span class="save-title">'+(SAVEICON[s.icon]||SAVEICON.cache)+esc(s.title)+'</span><span class="save-amt'+cls+' num">'+esc(s.amount)+'</span></div><div class="save-desc num">'+esc(s.desc)+"</div></div>";
   }).join("");
+}
+
+/* ---------- compression ---------- */
+var CMPSHAPE={
+  stale:{k:'陈旧 tool 输出',d:'早轮次的大段输出仍被后续调用反复读入'},
+  reread:{k:'重复读取',d:'同一文件/内容被多次读入上下文'},
+  long:{k:'超长输出',d:'单次输出体积过大，占用后续轮次上下文'}
+};
+// 压缩潜力金额：始终保留两位（大额场景下小项不能被四舍五入抹掉）
+function fmtCnyExact(n){
+  n=+n||0;
+  return "¥"+n.toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function renderCompression(){
+  var box=document.getElementById('cmpBody');
+  if(!box)return;
+  var c=D.compression;
+  if(!c||!c.itemCount){box.innerHTML='<div class="cmp-empty">本月暂无明显可压缩的上下文浪费。</div>';return}
+
+  var lo=Math.max(0,+c.potentialCny||0), hi=Math.max(lo,+c.potentialCnyMax||0);
+  var items=+c.itemCount||0;
+  var p=c.patterns||{stale:0,reread:0,long:0};
+  var sum=(+p.stale||0)+(+p.reread||0)+(+p.long||0);
+
+  var h='<div class="cmp-bar"><div class="cmp-big num">'+fmtCny(lo)+'<small> – '+fmtCny(hi).replace('¥','¥')+'</small></div>'+
+        '<div class="cmp-sub num">本月可节省区间 · 共 '+items.toLocaleString('zh-CN')+' 处浪费点</div></div>';
+
+  var pct=function(v){return sum>0?Math.round((+v||0)/sum*1000)/10:0};
+  // 模式拆分
+  var order=['stale','reread','long'];
+  h+='<div class="cmp-grid">'+order.map(function(k){
+    var v=+p[k]||0, sh=CMPSHAPE[k];
+    var pv=pct(v);
+    return '<div class="cmp-card"><div class="cmp-k">'+sh.k+'</div><div class="cmp-v num">'+fmtCnyExact(v)+'</div><div class="cmp-p num">'+(pv>=1?'占比 '+trim1(pv)+'% · ':'')+sh.d+'</div></div>';
+  }).join('')+'</div>';
+  // 占比条
+  h+='<div class="cmp-track">'+order.map(function(k){
+    var v=+p[k]||0;if(!v)return '';
+    var col=k==='stale'?'var(--pos)':k==='reread'?'var(--info)':'color-mix(in oklab, var(--pos) 55%, var(--muted))';
+    return '<i style="width:'+(sum>0?v/sum*100:0)+'%;background:'+col+'"></i>';
+  }).join('')+'</div>';
+
+  // 最浪费会话
+  var sess=(c.sessions||[]).slice(0,5);
+  if(sess.length){
+    h+='<div class="cmp-list">'+sess.map(function(x){
+      var name=String(x.key||'').replace(':'+String(x.key||'').split(':').pop(),'');
+      var short=String(x.key||'');
+      var ci=short.indexOf(':');
+      var host=ci>0?short.slice(0,ci):short, sid=ci>0?short.slice(ci+1):'';
+      var label=host+(sid?' · '+sid.slice(-8):'');
+      return '<div class="cmp-row"><span class="cmp-name" title="'+esc(short)+'">'+esc(label)+'</span>'+
+             '<span class="cmp-t num">'+(x.items||0)+' 处 · '+esc((x.topPatterns||[]).map(function(t){return (CMPSHAPE[t]||{}).k||t}).join('/'))+'</span>'+
+             '<span class="cmp-c num">'+fmtCnyExact(x.wasteCny)+'</span></div>';
+    }).join('')+'</div>';
+  }
+  h+='<div class="cmp-note">口径：把这些浪费点压缩掉后、本月可少花的钱（区间下界=保守估算）。真正的自动压缩要在「数据设置」里显式开启，这里只做量化与提醒。</div>';
+  box.innerHTML=h;
 }
 
 /* ---------- token trend ---------- */
@@ -1208,7 +1301,7 @@ function emptyData(){
     trend:{days:days,budgetDailyCny:null,todaySplit:{cacheReadCny:0,cacheWriteCny:0,outputCny:0,newInputCny:0},sum14Cny:0,peakCny:0},
     mix:{today:{model:[],tool:[],proj:[]},week:{model:[],tool:[],proj:[]},month:{model:[],tool:[],proj:[]}},
     tokTrend:{days:days,top:{model:"",tool:"",proj:""}},
-    modelRank:[],hostRank:[],savings:[],adapters:[],
+    modelRank:[],hostRank:[],savings:[],compression:null,adapters:[],
     settings:{models:[],cloudApis:[],subscriptions:[],monthlyBudgetCny:null,usdToCny:7.2}
   };
 }
@@ -1228,6 +1321,7 @@ function renderAll(d){
   renderTok();
   renderRanks();
   renderSavings();
+  renderCompression();
   renderAdapters();
   renderFooter();
 }
