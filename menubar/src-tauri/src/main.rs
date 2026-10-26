@@ -28,6 +28,27 @@ fn dashboard_html_path() -> PathBuf {
     home_dir().join(".token-pilot").join("dashboard.html")
 }
 
+/// 随 app 编译进二进制的看板 HTML（构建时从 menubar/src/dashboard.html 读入）。
+/// 桌面端打开看板优先用它，这样「app 更新了、看板却没更新」不会再发生。
+const EMBEDDED_DASHBOARD: &str = include_str!("../../src/dashboard.html");
+
+/// 把内嵌看板写到 ~/.token-pilot/dashboard.html。
+/// 仅当文件不存在、或内容与内嵌版不一致时才写（避免每次启动都改动用户文件）。
+/// 返回 true 表示发生了写入。写入失败（只读目录等）不致命，返回 false。
+fn sync_embedded_dashboard() -> bool {
+    let target = dashboard_html_path();
+    let embedded = EMBEDDED_DASHBOARD;
+    if let Ok(cur) = fs::read_to_string(&target) {
+        if cur == embedded {
+            return false; // 已是最新，不动
+        }
+    }
+    if let Some(dir) = target.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    fs::write(&target, embedded).is_ok()
+}
+
 fn read_data() -> Option<Value> {
     let s = fs::read_to_string(data_path()).ok()?;
     serde_json::from_str(&s).ok()
@@ -154,16 +175,12 @@ fn data_stale() -> bool {
     }
 }
 
-fn dashboard_server_up() -> bool {
-    let addr: std::net::SocketAddr = match "127.0.0.1:17895".parse() {
-        Ok(a) => a,
-        Err(_) => return false,
-    };
-    std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
-}
 
 /// 打开完整看板：优先显示内置原生窗口（自带数据，不依赖 serve）；
-/// 窗口不可用时退回浏览器（serve 或静态 bake 文件）。
+/// 窗口不可用时退回浏览器。
+///
+/// 顺序上**内置窗口永远第一**：看板前端随 app 编译进二进制，
+/// 这样「app 升了、看板还是旧的」不可能发生。
 fn open_dashboard_impl(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("dashboard") {
         let _ = w.show();
@@ -171,15 +188,14 @@ fn open_dashboard_impl(app: &tauri::AppHandle) {
         let _ = w.set_focus();
         return;
     }
-    if dashboard_server_up() {
-        let _ = open::that("http://127.0.0.1:17895");
-        return;
-    }
+    // 内置窗口不可用（异常兜底）：先把内嵌版落盘，保证打开的是当前版本
+    sync_embedded_dashboard();
     let html = dashboard_html_path();
     if html.exists() {
         let _ = open::that(&html);
         return;
     }
+    // 仍然不行才退回本地 serve
     let _ = open::that("http://127.0.0.1:17895");
 }
 
@@ -386,6 +402,10 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![get_data, hide_panel, open_dashboard, save_config])
         .setup(|app| {
+            // 让 ~/.token-pilot/dashboard.html 与 app 内置版本保持一致：
+            // 否则 app 升级后，走浏览器回退路径的人打开的还是旧看板。
+            sync_embedded_dashboard();
+
             // macOS：Accessory 模式 = 无 Dock 图标、无菜单栏应用菜单，纯状态栏驻留
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
