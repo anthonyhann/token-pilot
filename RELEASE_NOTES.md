@@ -10,6 +10,13 @@ CI 只认**行首**的 `## vX.Y.Z` 标题，找不到或段落为空都会让发
 
 ---
 
+## v0.3.1
+
+- 修 npm 包名：改回 `@anthonyhan/token-pilot`（与 npm 账号一致；上一版误改成多一个 n 的 scope，npm 上并不存在，照 README 安装会 404）
+- 修 npm 包里缺看板页面：打包配置漏了 `web/`，装好后 `token-pilot dash` 会报「web/dashboard.html 不存在」——看板对 npm 用户完全不可用
+- 看板前端改为编译期嵌入 app 的二进制，桌面端启动时自动同步到本地文件，不会出现「app 升了看板还是旧的」
+- 补回归测试：断言打包配置必须包含 `web/`
+
 ## v0.3.0
 
 - 新增「压缩潜力」板块：本月有多少上下文浪费可以压掉、三种模式各占多少、最浪费的 5 个会话（此前这项数据只存在于命令里，看板看不到）
@@ -23,7 +30,7 @@ CI 只认**行首**的 `## vX.Y.Z` 标题，找不到或段落为空都会让发
 - 修文件名不一致：`latest.json` 里写的包名与实际文件名对不上，客户端自动更新会 404
 - 发布增加两道硬校验：安装包必须真实存在、文件模式必须匹配到东西，任一不满足直接中止而不是发出残缺 Release
 - 修正一处 v0.2.6 的历史问题：macOS 两个架构的 updater 包此前同名，会互相覆盖
-- 修 npm 包名：纠正为 `@anthonyhann/token-pilot`（此前误发成少一个 n 的 scope，照 README 安装会 404）
+- npm 包名当时误改为 `@anthonyhann/token-pilot`（多一个 n，npm 上不存在该 scope），v0.3.1 已改回 `@anthonyhan/token-pilot`
 - 打包资源一致性检查：看板/面板 HTML 与 `web/` 源不一致时 CI 直接失败，避免发出旧前端
 - 测试隔离：单元测试改用临时目录，不再读写你本机真实的 `~/.token-pilot` 状态
 
@@ -43,7 +50,7 @@ CI 只认**行首**的 `## vX.Y.Z` 标题，找不到或段落为空都会让发
 
 ## v0.2.5
 
-- 尝试修正 npm scope（当时改成了少一个 n 的写法，实际从 v0.2.9 起才真正对齐 `@anthonyhann`）
+- npm scope 命名反复过一次（见 v0.3.1 说明，最终确定为 `@anthonyhan`，与 npm 账号一致）
 - 包名冲突说明：npm 上的 `token-pilot` 是同名第三方包（会往 Claude Code 注入 hooks），务必装 scoped 版
 - npm 包可运行性修复：`tsc` 构建 `dist`，`bin` 走编译产物，`tsx` 仅承担开发态
 
