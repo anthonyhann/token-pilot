@@ -26,7 +26,7 @@
 
 ## v0.2.5
 
-- 修正 npm scope 为真实账号 `@anthonyhann`（原 `@anthonyhan` 少一个 n，安装会 404）
+- 尝试修正 npm scope（当时改成了少一个 n 的写法，实际从 v0.2.7 起才真正对齐 `@anthonyhann`）
 - 包名冲突说明：npm 上的 `token-pilot` 是同名第三方包（会往 Claude Code 注入 hooks），务必装 scoped 版
 - npm 包可运行性修复：`tsc` 构建 `dist`，`bin` 走编译产物，`tsx` 仅承担开发态
 
