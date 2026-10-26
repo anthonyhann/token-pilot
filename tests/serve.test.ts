@@ -2,6 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { injectData, readWebAsset } from '../src/cli/serve.ts';
 
 test('injectData：恰好替换注入标记一次，且内容可 JSON.parse', () => {
@@ -26,4 +27,13 @@ test('readWebAsset：dashboard.html / panel.html 存在且非空', () => {
     assert.ok(html && html.length > 10_000, `${name} 缺失或为空`);
     assert.ok(html.includes('window.__TP_DATA__=null;'), `${name} 缺注入标记`);
   }
+});
+
+// 回归：package.json 的 files 曾漏掉 web/，导致 npm 包装上后
+// serve/dash 直接报「web/dashboard.html 不存在」，用户拿不到看板。
+test('打包配置：files 必须包含 web（否则 npm 包里没有看板 HTML）', () => {
+  const pkgPath = new URL('../package.json', import.meta.url);
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { files?: string[] };
+  assert.ok(Array.isArray(pkg.files), 'package.json 缺 files 字段');
+  assert.ok(pkg.files!.includes('web'), 'files 必须包含 web，否则看板页面不会被打进 npm 包');
 });
