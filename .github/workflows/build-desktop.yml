@@ -82,7 +82,8 @@ jobs:
             F=$(basename "$MSI")
           fi
           if [ -n "$PLAT" ]; then
-            cat > "$B/latest.json" <<JSON
+            # 片段按 target 命名：三平台并行上传后不会互相覆盖（latest.json 同名会丢平台）
+            cat > "$B/latest-${{ matrix.target }}.json" <<JSON
           {
             "version": "v$VER",
             "notes": "token-pilot v$VER",
@@ -107,5 +108,124 @@ jobs:
             menubar/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             menubar/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
             menubar/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.sig
-            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/**/latest.json
+            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/**/latest-*.json
           if-no-files-found: ignore
+
+  # ── 汇总发布 ────────────────────────────────────────────────
+  # 三平台并行构建后，把各自的 latest.json 片段合并成一份（三平台齐全），
+  # 连同安装包一起发到 GitHub Release。缺任何一平台直接失败，不回退到「部分可用」。
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 校验版本号一致（tag = tauri.conf.json = package.json = Cargo.toml）
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME#v}"
+          V_CONF=$(node -e "console.log(require('./menubar/src-tauri/tauri.conf.json').version)")
+          V_PKG=$(node -e "console.log(require('./package.json').version)")
+          V_CARGO=$(grep -m1 '^version' menubar/src-tauri/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
+          echo "tag=$TAG conf=$V_CONF pkg=$V_PKG cargo=$V_CARGO"
+          for v in "$V_CONF" "$V_PKG" "$V_CARGO"; do
+            [ "$v" = "$TAG" ] || { echo "::error::版本号不一致：tag=$TAG，但某处仍是 $v"; exit 1; }
+          done
+
+      - name: 下载三平台产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: 合并 latest.json（三平台必须齐全）
+        shell: bash
+        run: |
+          set -e
+          python3 - <<'PY'
+          import glob, json, os, datetime, sys
+          frags = sorted(glob.glob('artifacts/**/latest-*.json', recursive=True))
+          if not frags:
+              sys.exit('::error::没有找到任何 latest-*.json 片段')
+          platforms, version = {}, None
+          for f in frags:
+              d = json.load(open(f))
+              version = d.get('version') or version
+              for k, v in (d.get('platforms') or {}).items():
+                  if k in platforms:
+                      sys.exit(f'::error::平台 {k} 出现重复片段')
+                  platforms[k] = v
+          need = {'darwin-aarch64', 'darwin-x86_64', 'windows-x86_64'}
+          missing = need - set(platforms)
+          if missing:
+              sys.exit(f'::error::三平台不全，缺少 {sorted(missing)}；实际 {sorted(platforms)}')
+          # notes 取仓库内 CHANGELOG 对应段落，避免残留「CI 构建中」
+          ver = (version or '').lstrip('v')
+          notes = f'token-pilot v{ver}'
+          cl = 'RELEASE_NOTES.md'
+          if os.path.exists(cl):
+              txt = open(cl, encoding='utf-8').read()
+              marker = f'## v{ver}'
+              if marker in txt:
+                  body = txt.split(marker, 1)[1]
+                  body = body.split('\n## v', 1)[0].strip()
+                  if body:
+                      notes = body
+          if '构建中' in notes:
+              sys.exit('::error::notes 里残留「构建中」字样')
+          out = {
+              'version': f'v{ver}',
+              'notes': notes,
+              'pub_date': datetime.datetime.now(datetime.timezone.utc)
+                          .strftime('%Y-%m-%dT%H:%M:%SZ'),
+              'platforms': {k: platforms[k] for k in sorted(platforms)},
+          }
+          json.dump(out, open('artifacts/latest.json', 'w'), ensure_ascii=False, indent=2)
+          print(json.dumps(out, ensure_ascii=False, indent=2))
+          PY
+
+      - name: 发布 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: token-pilot ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          # latest.json 必须是一个整份、含三平台的文件，由上面合并步骤产出
+          files: |
+            artifacts/latest.json
+            artifacts/*.dmg
+            artifacts/*.msi
+            artifacts/*.msi.sig
+            artifacts/*.app.tar.gz
+            artifacts/*.app.tar.gz.sig
+          fail_on_unmatched_files: false
+
+      - name: 回写 brew cask（版本 + aarch64 dmg 的 sha256）
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::未配置 HOMEBREW_TAP_TOKEN，跳过 brew cask 更新（需手动 bump）"
+            exit 0
+          fi
+          VER="${GITHUB_REF_NAME#v}"
+          DMG="token-pilot_${VER}_aarch64.dmg"
+          # Release 已上传完成后再算 sha256
+          curl -sSL --retry 5 --retry-delay 5 -o /tmp/app.dmg \
+            "https://github.com/anthonyhann/token-pilot/releases/download/${GITHUB_REF_NAME}/${DMG}"
+          SHA=$(shasum -a 256 /tmp/app.dmg | awk '{print $1}')
+          echo "sha256=$SHA"
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/anthonyhann/homebrew-token-pilot.git" /tmp/tap
+          CASK=/tmp/tap/Casks/token-pilot.rb
+          sed -i -E "s/^  version \".*\"/  version \"${VER}\"/" "$CASK"
+          sed -i -E "s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" "$CASK"
+          cd /tmp/tap
+          git -c user.name="token-pilot bot" -c user.email="bmomhan@gmail.com" \
+              commit -am "token-pilot ${VER}" || { echo "cask 无变化，跳过"; exit 0; }
+          git push

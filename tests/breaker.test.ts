@@ -1,12 +1,17 @@
 // 打转熔断通知：每会话每天最多一次（冷却持久化）
+// 状态目录通过 TOKEN_PILOT_HOME 隔离到临时目录，不碰用户真实的 ~/.token-pilot。
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
-import { notifyRetryLoops } from '../src/core/breaker.ts';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
-const STATE = '/Users/hanqiang/.token-pilot/alerted-sessions.json';
-const bak = existsSync(STATE) ? JSON.parse(readFileSync(STATE, 'utf8')) : null;
+// 必须在 import breaker（它经 config 读取 CONFIG_DIR）之前设置
+const HOME = mkdtempSync(path.join(tmpdir(), 'token-pilot-test-'));
+process.env.TOKEN_PILOT_HOME = HOME;
+
+const { notifyRetryLoops } = await import('../src/core/breaker.ts');
 
 test('同一会话当天只通知一次', () => {
   const alerts = [{ sessionId: 'test-sess-1', agent: 'claude-code', model: 'm', calls: 50, totalCostUsd: 2 }];
@@ -28,6 +33,5 @@ test('每次最多通知 1 个（防轰炸），其余标记不再提', () => {
 });
 
 test.after(() => {
-  if (bak) writeFileSync(STATE, JSON.stringify(bak));
-  else rmSync(STATE, { force: true });
+  rmSync(HOME, { recursive: true, force: true });
 });
