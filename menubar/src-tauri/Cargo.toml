@@ -1,6 +1,6 @@
 [package]
 name = "token-pilot-menubar"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 description = "token-pilot 菜单栏 — AI 账单托盘（macOS + Windows）"
 

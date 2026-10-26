@@ -79,11 +79,15 @@ jobs:
               aarch64-apple-darwin) PLAT=darwin-aarch64 ;;
               x86_64-apple-darwin) PLAT=darwin-x86_64 ;;
             esac
-            F=$(basename "$APP_TGZ")
+            case "${{ matrix.target }}" in
+              aarch64-apple-darwin) ARCH=aarch64 ;;
+              x86_64-apple-darwin)  ARCH=x64 ;;
+            esac
+            F="token-pilot_${VER}_${ARCH}.app.tar.gz"
           elif [ -n "$MSI" ]; then
             SIG=$(cat "$MSI.sig")
             PLAT=windows-x86_64
-            F=$(basename "$MSI")
+            F="token-pilot_${VER}_x64.msi"
           fi
           if [ -n "$PLAT" ]; then
             # 片段按 target 命名：三平台并行上传后不会互相覆盖（latest.json 同名会丢平台）
@@ -102,18 +106,49 @@ jobs:
           JSON
           fi
 
+      # 先把要发布的文件收进一个扁平目录：
+      # 1) 直接上传 target/... 相对路径会让 artifact 里保留 menubar/src-tauri/... 层级，
+      #    release job 在仓库根用 artifacts/*.dmg 就匹配不到（v0.2.8 首次自动发布踩过）
+      # 2) dmg / app.tar.gz 必须先按 target 改名，否则两个 mac 平台的同名文件会互相覆盖
+      - name: Stage release files（拍平 + 按平台改名）
+        shell: bash
+        working-directory: menubar
+        run: |
+          set -e
+          B=src-tauri/target/${{ matrix.target }}/release/bundle
+          OUT=../dist-release
+          VER=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
+          rm -rf "$OUT" && mkdir -p "$OUT"
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) ARCH=aarch64 ;;
+            x86_64-apple-darwin)  ARCH=x64 ;;
+            x86_64-pc-windows-msvc) ARCH=x64 ;;
+            *) ARCH=${{ matrix.target }} ;;
+          esac
+          for f in "$B"/dmg/*.dmg; do
+            [ -e "$f" ] || continue
+            cp "$f" "$OUT/token-pilot_${VER}_${ARCH}.dmg"
+          done
+          for f in "$B"/macos/*.app.tar.gz; do
+            [ -e "$f" ] || continue
+            cp "$f" "$OUT/token-pilot_${VER}_${ARCH}.app.tar.gz"
+            cp "$f.sig" "$OUT/token-pilot_${VER}_${ARCH}.app.tar.gz.sig"
+          done
+          for f in "$B"/msi/*.msi; do
+            [ -e "$f" ] || continue
+            # 与 latest.json 片段里的 F 保持一致
+            cp "$f" "$OUT/token-pilot_${VER}_x64.msi"
+            cp "$f.sig" "$OUT/token-pilot_${VER}_x64.msi.sig"
+          done
+          cp "$B"/latest-${{ matrix.target }}.json "$OUT/"
+          ls -la "$OUT"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: token-pilot-${{ matrix.target }}
-          path: |
-            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
-            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.sig
-            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
-            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.sig
-            menubar/src-tauri/target/${{ matrix.target }}/release/bundle/**/latest-*.json
-          if-no-files-found: ignore
+          path: dist-release/*
+          if-no-files-found: error
 
   # ── 汇总发布 ────────────────────────────────────────────────
   # 三平台并行构建后，把各自的 latest.json 片段合并成一份（三平台齐全），
@@ -200,6 +235,23 @@ jobs:
           print(json.dumps(out, ensure_ascii=False, indent=2))
           PY
 
+      - name: 校验 latest.json 引用的文件都在待上传目录
+        shell: bash
+        run: |
+          set -e
+          python3 - <<'PY'
+          import json, os, sys
+          d = json.load(open('artifacts/latest.json', encoding='utf-8'))
+          missing = []
+          for plat, info in d['platforms'].items():
+              name = info['url'].rsplit('/', 1)[-1]
+              if not os.path.exists(os.path.join('artifacts', name)):
+                  missing.append(f'{plat} -> {name}')
+          if missing:
+              sys.exit('::error::latest.json 引用的文件不存在：' + '; '.join(missing))
+          print('✓ 三平台引用的安装包都在')
+          PY
+
       - name: 发布 Release
         uses: softprops/action-gh-release@v2
         with:
@@ -215,7 +267,7 @@ jobs:
             artifacts/*.msi.sig
             artifacts/*.app.tar.gz
             artifacts/*.app.tar.gz.sig
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
 
       - name: 回写 brew cask（版本 + aarch64 dmg 的 sha256）
         shell: bash
