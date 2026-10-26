@@ -460,16 +460,8 @@ export async function buildDashboardData(
         sessions: comp.sessions.map((s) => ({ key: s.key, agent: s.agent, wasteCny: s.wasteUsd * fx, items: s.items, topPatterns: s.topPatterns })),
       }
     : null;
-  // 压缩潜力够大才进省钱建议卡（第 4 张）
-  if (compression && compression.potentialCny >= 5) {
-    savings.push({
-      kind: 'pos',
-      icon: 'cache',
-      title: '上下文压缩空间',
-      desc: `本月 ${compression.itemCount} 处上下文重发可压缩（陈旧输出/重复读取/超长日志），若压缩约省 ${fmtCny(compression.potentialCny)}–${fmtCny(compression.potentialCnyMax)}。运行 token-pilot compress-report 看明细。`,
-      amount: `约省 ${fmtCny(compression.potentialCny)}/月`,
-    });
-  }
+  // 压缩潜力不再塞进省钱建议卡：看板已有独立的「压缩潜力」板块
+  // （带模式拆分 + 最浪费会话），原先这里再放一张会让同一件事重复出现。
 
   // ---------- 2B：该 compact 了（活跃会话上下文超阈值） ----------
   const COMPACT_AT = 100_000;
