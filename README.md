@@ -169,4 +169,4 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 
 ## License
 
-MIT © anthonyhann
+[MIT](LICENSE) © anthonyhann

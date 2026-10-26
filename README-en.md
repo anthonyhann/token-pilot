@@ -138,4 +138,4 @@ A solo dev + a few AI agents running product experiments (remote, Xi'an). token-
 
 ## License
 
-MIT © anthonyhann
+[MIT](LICENSE) © anthonyhann
