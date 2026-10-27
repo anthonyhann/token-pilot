@@ -781,6 +781,11 @@ async function buildSettings(
   fx: number,
   d30: number,
 ): Promise<SettingsData> {
+  // RTK 状态：区分「本工具装的 rtk-oss」与「别的来源的 rtk」，前端据此如实展示
+  const rtkSt = await import('./rtk.js')
+    .then((m) => m.rtkStatus())
+    .catch(() => ({ installed: false, source: 'none' as const, version: '', detail: '检测失败' }));
+
   // 近 30 天出现过的模型（按花费降序）∪ 用户覆写
   const costByModel = new Map<string, number>();
   for (const e of events) {
@@ -803,7 +808,9 @@ async function buildSettings(
   });
   return {
     autoCompact: cfg.autoCompact ?? { enabled: false },
-    rtkInstalled: await import('./rtk.js').then((m) => m.rtkInstalled()).catch(() => false),
+    rtkInstalled: rtkSt.installed,
+    rtkSource: rtkSt.source,
+    rtkDetail: rtkSt.detail,
     models,
     overrideNames: Object.keys(cfg.priceOverrides ?? {}),
     cloudApis: cfg.cloudApis ?? [],

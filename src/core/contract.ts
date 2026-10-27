@@ -107,6 +107,10 @@ export interface SettingsModel {
 export interface SettingsData {
   autoCompact?: { enabled: boolean; thresholdTokens?: number; applyClaudeCode?: boolean; installRtk?: boolean };
   rtkInstalled?: boolean;
+  /** 'ours' = 本工具装的 rtk-oss；'foreign' = 其他来源的 rtk；'none' = 未安装 */
+  rtkSource?: 'ours' | 'foreign' | 'none';
+  /** 人话说明，前端直接展示 */
+  rtkDetail?: string;
   models: SettingsModel[];
   overrideNames: string[];   // 当前被人工覆写的模型名（弹窗 diff 保存用）
   cloudApis: { name: string; monthlyCny: number }[];

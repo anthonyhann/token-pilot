@@ -337,8 +337,161 @@ fn open_dashboard(app: tauri::AppHandle) {
 }
 
 /// 设置弹窗写回：把 {monthlyBudgetCny, priceOverrides, cloudApis, subscriptions} 合并进 config.json
+// ── RTK（rtk-oss 输出压缩层）─────────────────────────────────────────────
+// 与 CLI 侧 src/core/rtk.ts 保持同样的判断口径：
+//   - 'ours'    通过本工具装了 rtk-oss
+//   - 'foreign' 系统里已有别的来源的 rtk（brew 主仓库 / 手动装）
+//   - 'none'    没装
+// rtk-oss 与 brew 主仓库的 rtk 都占用 `rtk` 二进制，brew formula 里声明了
+// conflicts_with，所以装了别的来源时必须先卸载才能装 rtk-oss。
+
+fn run_capture(cmd: &str, args: &[&str], timeout_secs: u64) -> Option<String> {
+    // 单次执行 + 超时轮询。注意不能"轮询完再执行一遍拿输出"——那会把 brew 跑两次。
+    let mut child = Command::new(cmd)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .ok()?;
+
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return None;
+                }
+                // 子进程已退出，接着读它留下的管道输出
+                let out = child.wait_with_output().ok()?;
+                return Some(String::from_utf8_lossy(&out.stdout).trim().to_string());
+            }
+            Ok(None) => {
+                if start.elapsed().as_secs() > timeout_secs {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            Err(_) => return None,
+        }
+    }
+}
+
+fn brew_has(formula: &str) -> bool {
+    match run_capture("brew", &["list", "--formula"], 20) {
+        Some(out) => out.lines().map(|l| l.trim()).any(|l| l == formula),
+        None => false,
+    }
+}
+
+/// 返回 (source, version)。source ∈ {"ours","foreign","none"}
+fn rtk_state() -> (String, String) {
+    #[cfg(target_os = "windows")]
+    {
+        let ver = run_capture("rtk", &["--version"], 5);
+        match ver {
+            None => ("none".into(), String::new()),
+            Some(v) => {
+                let ours = run_capture(
+                    "winget",
+                    &["list", "--id", "rtk-ai.rtk-oss", "-e", "--accept-source-agreements"],
+                    30,
+                )
+                .map(|o| o.contains("rtk-ai.rtk-oss"))
+                .unwrap_or(false);
+                (if ours { "ours".into() } else { "foreign".into() }, v)
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let ver = match run_capture("rtk", &["--version"], 5) {
+            Some(v) => v,
+            None => return ("none".into(), String::new()),
+        };
+        if brew_has("rtk-oss") {
+            ("ours".into(), ver)
+        } else {
+            // brew 主仓库的 rtk，或手动安装
+            ("foreign".into(), ver)
+        }
+    }
+}
+
+/// 安装 rtk-oss。返回 (ok, message)。
+fn install_rtk() -> (bool, String) {
+    let (source, version) = rtk_state();
+    if source == "ours" {
+        return (true, format!("RTK 已安装（{version}）"));
+    }
+    if source == "foreign" {
+        return (
+            false,
+            format!(
+                "检测到系统里已安装 {version}，但来源不是 rtk-oss，两者都占用 rtk 命令、会互相冲突。请先卸载现有的 rtk 再勾选。"
+            ),
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    let ok = run_capture(
+        "winget",
+        &[
+            "install",
+            "--id",
+            "rtk-ai.rtk-oss",
+            "-e",
+            "--accept-source-agreements",
+            "--accept-package-agreements",
+        ],
+        300,
+    )
+    .is_some();
+    #[cfg(not(target_os = "windows"))]
+    let ok = run_capture("brew", &["install", "rtk-ai/tap/rtk-oss"], 300).is_some();
+
+    if !ok {
+        return (false, "安装命令执行失败（brew/winget 返回非 0），请检查网络或手动安装 rtk-oss".into());
+    }
+    let (source2, version2) = rtk_state();
+    if source2 == "ours" {
+        (true, format!("RTK 已安装（{version2}）"))
+    } else {
+        (false, "安装命令执行完了但检测到的 rtk 来源不对，请手动检查".into())
+    }
+}
+
+/// 卸载 rtk-oss。只卸我们自己装的，别人的 rtk 不擅自删。
+fn uninstall_rtk() -> (bool, String) {
+    let (source, version) = rtk_state();
+    if source == "none" {
+        return (true, "RTK 未安装，无需卸载".into());
+    }
+    if source == "foreign" {
+        return (
+            false,
+            format!("已安装 {version}，但不是本工具安装的，为避免误删请手动卸载"),
+        );
+    }
+    #[cfg(target_os = "windows")]
+    let ok = run_capture("winget", &["uninstall", "--id", "rtk-ai.rtk-oss", "-e"], 180).is_some();
+    #[cfg(not(target_os = "windows"))]
+    let ok = run_capture("brew", &["uninstall", "rtk-oss"], 180).is_some();
+
+    if !ok {
+        return (false, "卸载命令执行失败，请手动执行 brew uninstall rtk-oss".into());
+    }
+    if rtk_state().0 != "none" {
+        (false, "卸载命令执行了但 rtk 仍可用，请手动检查".into())
+    } else {
+        (true, "已卸载 RTK".into())
+    }
+}
+
 #[tauri::command]
-fn save_config(json: String) -> Result<(), String> {
+fn save_config(json: String) -> Result<Value, String> {
     let patch: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     let cfg_path = home_dir().join(".token-pilot").join("config.json");
     let mut cur: Value = fs::read_to_string(&cfg_path)
@@ -365,6 +518,33 @@ fn save_config(json: String) -> Result<(), String> {
             }
         }
     }
+    // RTK 装卸：与 CLI/Web 行为一致。
+    // RTK 失败不阻塞其他设置的保存，但结果要带回前端。
+    let mut rtk_note: Value = Value::Null;
+    if let Some(ac) = patch.get("autoCompact").and_then(|v| v.as_object()) {
+        if let Some(want) = ac.get("installRtk").and_then(|v| v.as_bool()) {
+            let (source, _ver) = rtk_state();
+            if want && source != "ours" {
+                let (ok, msg) = install_rtk();
+                rtk_note = serde_json::json!({ "ok": ok, "message": msg });
+                // 装失败就把勾选还原，别让配置声称已装
+                if !ok {
+                    if let Some(obj) = cur.get_mut("autoCompact").and_then(|v| v.as_object_mut()) {
+                        obj.insert("installRtk".into(), Value::Bool(false));
+                    }
+                }
+            } else if !want && source == "ours" {
+                let (ok, msg) = uninstall_rtk();
+                rtk_note = serde_json::json!({ "ok": ok, "message": msg });
+                if !ok {
+                    if let Some(obj) = cur.get_mut("autoCompact").and_then(|v| v.as_object_mut()) {
+                        obj.insert("installRtk".into(), Value::Bool(true));
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(dir) = cfg_path.parent() {
         let _ = fs::create_dir_all(dir);
     }
@@ -372,7 +552,7 @@ fn save_config(json: String) -> Result<(), String> {
     fs::write(&cfg_path, out + "\n").map_err(|e| e.to_string())?;
     // 写完后触发一次 sync，让看板立刻用新配置重算
     spawn_sync();
-    Ok(())
+    Ok(serde_json::json!({ "ok": true, "rtk": rtk_note }))
 }
 
 

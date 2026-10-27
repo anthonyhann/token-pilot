@@ -22,7 +22,7 @@ import { applyClaudeAutoCompact } from '../core/autocompact.js';
 import { costOf } from '../core/pricing.js';
 import { detectRetryLoops } from '../core/retry-detector.js';
 import { notifyRetryLoops } from '../core/breaker.js';
-import { installRtk, uninstallRtk, rtkInstalled } from '../core/rtk.js';
+import { installRtk, uninstallRtk, rtkStatus } from '../core/rtk.js';
 import type { DashboardData } from '../core/contract.js';
 import type { TokenPilotConfig } from '../core/config.js';
 
@@ -145,23 +145,26 @@ export async function serve(port = 17895): Promise<void> {
           }
         }
         // RTK 安装层：勾选且未装 → 装；取消勾选且已装 → 卸
+        // 原则：RTK 失败**不阻塞其他设置的保存**——用户改预算/价格时不该因为装不上 rtk 而全丢。
+        // 但失败原因必须带回前端，不能吞掉。
+        let rtkNote: { ok: boolean; message: string } | null = null;
         if (next.autoCompact && typeof next.autoCompact.installRtk === 'boolean') {
-          const installed = await rtkInstalled();
-          if (next.autoCompact.installRtk && !installed) {
+          const st = await rtkStatus();
+          if (next.autoCompact.installRtk && st.source !== 'ours') {
             const r = await installRtk();
-            if (!r.ok) {
-              res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
-              res.end(JSON.stringify({ ok: false, error: r.message }));
-              return;
-            }
-          } else if (!next.autoCompact.installRtk && installed) {
-            await uninstallRtk();
+            rtkNote = { ok: r.ok, message: r.message };
+            // 装失败时把勾选还原，避免配置声称已装而实际没装
+            if (!r.ok) next.autoCompact.installRtk = false;
+          } else if (!next.autoCompact.installRtk && st.source === 'ours') {
+            const r = await uninstallRtk();
+            rtkNote = { ok: r.ok, message: r.message };
+            if (!r.ok) next.autoCompact.installRtk = true;
           }
         }
         saveConfig(next);
         await refresh();
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ ok: true }));
+        res.end(JSON.stringify({ ok: true, rtk: rtkNote }));
         return;
       }
       if (url === '/' || url === '/index.html') {
