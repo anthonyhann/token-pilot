@@ -13,7 +13,9 @@
     "verify:assets": "node scripts/sync-web-assets.js --check",
     "today": "npx tsx src/cli/index.ts today",
     "test": "npx tsx --test tests/*.test.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "metrics": "python3 scripts/publish-metrics.py",
+    "metrics:report": "python3 scripts/publish-metrics.py --report"
   },
   "engines": {
     "node": ">=18"
