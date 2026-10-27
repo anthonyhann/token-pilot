@@ -113,6 +113,10 @@ static TRAY_TITLE_CUR: std::sync::Mutex<String> = std::sync::Mutex::new(String::
 // 托盘引用（setup 时存入，get_data 命令里也要用）
 static TRAY_REFS: std::sync::OnceLock<(tauri::tray::TrayIcon, MenuItem<Wry>)> = std::sync::OnceLock::new();
 
+/// 更新菜单项句柄：需要在状态变化时改文本/可用性（TrayIcon 没有 menu() 访问器）
+static UPDATE_MENU_REFS: std::sync::OnceLock<(MenuItem<Wry>, MenuItem<Wry>)> =
+    std::sync::OnceLock::new();
+
 /// 数据文件变了就刷新托盘（幂等：内容没变就不动）
 fn refresh_tray_if_changed(tray: &tauri::tray::TrayIcon, item: &MenuItem<Wry>) {
     if let Some(v) = read_data() {
@@ -598,24 +602,172 @@ fn save_config(json: String) -> Result<Value, String> {
 }
 
 
-/// 检查更新：有新版就下载安装并重启（updater 插件验签）；失败静默
+/// 全局：最近一次更新检查的结果，供托盘菜单与 tooltip 展示。
+/// 目的：更新失败此前完全静默，用户会误以为「没有新版本」。
+static UPDATE_STATE: std::sync::OnceLock<std::sync::Mutex<UpdateState>> = std::sync::OnceLock::new();
+
+#[derive(Clone, Default)]
+struct UpdateState {
+    /// 是否正在检查/下载
+    busy: bool,
+    /// 待安装的新版本号（Some = 已发现、等用户确认）
+    pending_version: Option<String>,
+    /// 版本说明（来自 latest.json 的 notes）
+    pending_notes: Option<String>,
+    /// 最近一次检查时间的可读描述
+    last_check: Option<String>,
+    /// 最近一次失败原因（None = 无错误）
+    last_error: Option<String>,
+}
+
+fn update_state() -> &'static std::sync::Mutex<UpdateState> {
+    UPDATE_STATE.get_or_init(|| std::sync::Mutex::new(UpdateState::default()))
+}
+
+/// 「最近检查」的描述：不引入 chrono，记录「距今多少分钟」由展示层算。
+/// 这里只存一个单调时间点（epoch 秒），够了——菜单里不展示绝对时间。
+fn now_desc() -> String {
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_secs().to_string(),
+        Err(_) => "0".to_string(),
+    }
+}
+
+/// 把更新状态同步到托盘菜单项。
+fn sync_update_ui(_app: &tauri::AppHandle) {
+    let st = match update_state().lock() {
+        Ok(g) => g.clone(),
+        Err(_) => return,
+    };
+    let Some((install_item, status_item)) = UPDATE_MENU_REFS.get() else {
+        return;
+    };
+
+    let label = match (&st.pending_version, st.busy) {
+        (_, true) => "正在检查更新…".to_string(),
+        (Some(v), false) => format!("安装更新 v{v} 并重启"),
+        (None, false) => "检查更新".to_string(),
+    };
+    let _ = install_item.set_text(label);
+    let _ = install_item.set_enabled(!st.busy);
+
+    let status = if let Some(e) = &st.last_error {
+        format!("上次检查失败：{e}")
+    } else if st.pending_version.is_some() {
+        "发现新版本".to_string()
+    } else if st.last_check.is_some() {
+        "已是最新版本".to_string()
+    } else {
+        "尚未检查更新".to_string()
+    };
+    let _ = status_item.set_text(status);
+}
+
+/// 检查更新：发现新版本后**不自动安装**，而是通知用户、在菜单里提供「安装」入口。
+/// 这样用户正在干活时不会突然被重启打断。
 fn check_update(app: &tauri::AppHandle) {
+    {
+        if let Ok(mut g) = update_state().lock() {
+            if g.busy {
+                return; // 已有检查在跑，避免叠加
+            }
+            g.busy = true;
+            g.last_error = None;
+        }
+    }
+    sync_update_ui(app);
+
     let app_h = app.clone();
     tauri::async_runtime::spawn(async move {
         use tauri_plugin_updater::UpdaterExt;
-        let updater = app_h.updater();
-        if let Ok(updater) = updater {
-            match updater.check().await {
-                Ok(Some(update)) => {
-                    let _ = update
-                        .download_and_install(|_c, _l| {}, || {})
-                        .await;
-                    app_h.restart();
-                }
-                _ => {}
+        let res = match app_h.updater() {
+            Ok(updater) => updater.check().await,
+            Err(e) => {
+                set_update_error(&app_h, format!("初始化失败：{e}"));
+                return;
             }
+        };
+        match res {
+            Ok(Some(update)) => {
+                let ver = update.version.clone();
+                let notes = update.body.clone();
+                if let Ok(mut g) = update_state().lock() {
+                    g.busy = false;
+                    g.pending_version = Some(ver.clone());
+                    g.pending_notes = notes.clone();
+                    g.last_check = Some(now_desc());
+                }
+                sync_update_ui(&app_h);
+                notify(&app_h, "发现新版本", &format!("token-pilot v{ver} 已就绪，右键托盘图标可安装"));
+            }
+            Ok(None) => {
+                if let Ok(mut g) = update_state().lock() {
+                    g.busy = false;
+                    g.pending_version = None;
+                    g.last_check = Some(now_desc());
+                }
+                sync_update_ui(&app_h);
+            }
+            Err(e) => set_update_error(&app_h, format!("检查失败：{e}")),
         }
     });
+}
+
+fn set_update_error(app: &tauri::AppHandle, msg: String) {
+    if let Ok(mut g) = update_state().lock() {
+        g.busy = false;
+        g.last_error = Some(msg);
+        g.last_check = Some(now_desc());
+    }
+    sync_update_ui(app);
+}
+
+/// 用户确认后：下载 + 验签 + 安装 + 重启。
+fn install_pending_update(app: &tauri::AppHandle) {
+    let app_h = app.clone();
+    tauri::async_runtime::spawn(async move {
+        use tauri_plugin_updater::UpdaterExt;
+        let updater = match app_h.updater() {
+            Ok(u) => u,
+            Err(e) => {
+                set_update_error(&app_h, format!("初始化失败：{e}"));
+                return;
+            }
+        };
+        let update = match updater.check().await {
+            Ok(Some(u)) => u,
+            Ok(None) => {
+                if let Ok(mut g) = update_state().lock() {
+                    g.pending_version = None;
+                }
+                sync_update_ui(&app_h);
+                return;
+            }
+            Err(e) => {
+                set_update_error(&app_h, format!("下载前检查失败：{e}"));
+                return;
+            }
+        };
+
+        if let Ok(mut g) = update_state().lock() {
+            g.busy = true;
+        }
+        sync_update_ui(&app_h);
+
+        match update.download_and_install(|_c, _l| {}, || {}).await {
+            Ok(()) => {
+                notify(&app_h, "更新完成", "token-pilot 即将重启以应用新版本");
+                app_h.restart();
+            }
+            Err(e) => set_update_error(&app_h, format!("安装失败：{e}")),
+        }
+    });
+}
+
+/// 系统通知（失败不致命，安静忽略）
+fn notify(app: &tauri::AppHandle, title: &str, body: &str) {
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder().title(title).body(body).show();
 }
 
 fn main() {
@@ -642,9 +794,17 @@ fn main() {
             let title_i = MenuItem::with_id(app, "title", &title_txt, false, None::<&str>)?;
             let panel_i = MenuItem::with_id(app, "open-panel", "打开面板", true, None::<&str>)?;
             let dash_i = MenuItem::with_id(app, "open-dashboard", "打开看板", true, None::<&str>)?;
-            let upd_i = MenuItem::with_id(app, "check-update", "检查更新", true, None::<&str>)?;
+            // 更新相关两个菜单项：
+            // install-update 文本随状态变化（「检查更新」→「安装更新 vX.Y.Z 并重启」）
+            // update-status 只读，展示上次检查结果/失败原因
+            let upd_i = MenuItem::with_id(app, "install-update", "检查更新", true, None::<&str>)?;
+            let upd_status_i =
+                MenuItem::with_id(app, "update-status", "尚未检查更新", false, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&title_i, &panel_i, &dash_i, &upd_i, &quit_i])?;
+            let menu = Menu::with_items(
+                app,
+                &[&title_i, &panel_i, &dash_i, &upd_i, &upd_status_i, &quit_i],
+            )?;
 
             // 托盘图标分平台：macOS 用单色模板（深浅菜单栏自适应）；
             // Windows 用彩色版（纯黑闪电在深色任务栏上会隐形），template 语义仅 macOS 有效
@@ -669,7 +829,17 @@ fn main() {
                     "quit" => app.exit(0),
                     "open-panel" => show_panel(app),
                     "open-dashboard" => open_dashboard_impl(app),
-                    "check-update" => check_update(app),
+                    "install-update" => {
+                        // 已有待安装版本 → 直接装；否则先检查
+                        let pending = update_state()
+                            .lock()
+                            .map(|g| g.pending_version.clone())
+                            .unwrap_or(None);
+                        match pending {
+                            Some(_) => install_pending_update(app),
+                            None => check_update(app),
+                        }
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -690,6 +860,7 @@ fn main() {
                 update_tray(&tray, &title_i, v);
             }
             let _ = TRAY_REFS.set((tray.clone(), title_i.clone()));
+            let _ = UPDATE_MENU_REFS.set((upd_i.clone(), upd_status_i.clone()));
 
             // 自动更新：启动 10s 后查一次，之后每 6h
             {
@@ -762,4 +933,66 @@ fn main() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod updater_tests {
+    use super::*;
+
+    #[test]
+    fn menu_label_idle() {
+        let st = UpdateState::default();
+        let label = match (&st.pending_version, st.busy) {
+            (_, true) => "正在检查更新…",
+            (Some(_), false) => "装更新",
+            (None, false) => "检查更新",
+        };
+        assert_eq!(label, "检查更新");
+    }
+
+    #[test]
+    fn menu_label_pending() {
+        let st = UpdateState {
+            pending_version: Some("0.3.2".into()),
+            ..Default::default()
+        };
+        let label = match (&st.pending_version, st.busy) {
+            (_, true) => "正在检查更新…".to_string(),
+            (Some(v), false) => format!("安装更新 v{v} 并重启"),
+            (None, false) => "检查更新".to_string(),
+        };
+        assert_eq!(label, "安装更新 v0.3.2 并重启");
+    }
+
+    #[test]
+    fn menu_label_busy_wins() {
+        let st = UpdateState {
+            pending_version: Some("0.3.2".into()),
+            busy: true,
+            ..Default::default()
+        };
+        let label = match (&st.pending_version, st.busy) {
+            (_, true) => "正在检查更新…".to_string(),
+            _ => "其它".to_string(),
+        };
+        assert_eq!(label, "正在检查更新…", "busy 状态优先，避免误导用户已可安装");
+    }
+
+    #[test]
+    fn error_takes_priority_over_pending() {
+        // 有失败原因时必须显示失败，不能让「发现新版本」掩盖错误
+        let st = UpdateState {
+            pending_version: Some("0.3.2".into()),
+            last_error: Some("network".into()),
+            ..Default::default()
+        };
+        let status = if let Some(e) = &st.last_error {
+            format!("上次检查失败：{e}")
+        } else if st.pending_version.is_some() {
+            "发现新版本".to_string()
+        } else {
+            "已是最新版本".to_string()
+        };
+        assert!(status.starts_with("上次检查失败"));
+    }
 }
