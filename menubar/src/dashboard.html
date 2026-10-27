@@ -680,8 +680,8 @@ footer .notes{max-width:560px}
           </div>
           <div class="m-row" style="display:flex;align-items:center;gap:8px;margin-top:6px">
             <input type="checkbox" id="mInstallRtk" aria-label="安装 RTK 输出压缩层" style="width:auto">
-            <label for="mInstallRtk" style="font-size:12px">安装 RTK 输出压缩层（rtk-oss 纯 Apache，brew/winget）<span id="rtkStatus" style="color:var(--muted);margin-left:6px"></span></label>
-            <div style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.6">勾选后点「保存」才会真正执行安装。若系统里已装有其他来源的 rtk，需先卸载（两者占用同一命令、会冲突）。</div>
+            <label for="mInstallRtk" style="font-size:12px">安装 RTK 输出压缩层（含压缩引擎，brew/winget）<span id="rtkStatus" style="color:var(--muted);margin-left:6px"></span></label>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.6">勾选后点「保存」才会真正执行：安装 rtk 并自动执行 <code>rtk init -g</code> 接入 Claude Code hook（会修改 ~/.claude/settings.json，已做备份）。若系统里已装有 rtk-oss，需先卸载（两者占用同一命令、会冲突）。</div>
           </div>
         </div>
       </div>
@@ -1013,8 +1013,8 @@ function renderSet(){
   // 只有「本工具装的 rtk-oss」才勾上；别的来源的 rtk 不冒充已装
   $("#mInstallRtk").checked=rtkSrc==="ours";
   var st=$("#rtkStatus");
-  if(rtkSrc==="ours"){st.textContent="（已安装 "+rtkDetail.replace(/^已安装 rtk-oss /,"")+"）";st.style.color="var(--muted)"}
-  else if(rtkSrc==="foreign"){st.textContent="（系统里已有别的来源的 rtk，勾选前需先卸载）";st.style.color="var(--warn)"}
+  if(rtkSrc==="ours"){st.textContent="（"+rtkDetail+"）";st.style.color="var(--muted)"}
+  else if(rtkSrc==="foreign"){st.textContent="（系统里是 rtk-oss，需先卸载才能换成完整版）";st.style.color="var(--warn)"}
   else{st.textContent="";st.style.color="var(--muted)"}
 }
 function openModal(){loadSettingsFromD();settingsOrig=JSON.parse(JSON.stringify(settings.models));renderSet();modal.hidden=false;modal.classList.add("open");$("#modalClose").focus()}

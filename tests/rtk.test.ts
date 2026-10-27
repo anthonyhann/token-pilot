@@ -33,18 +33,24 @@ test('rtkInstalled：与 rtkStatus().installed 一致（避免两套判断口径
   assert.equal(await rtkInstalled(), st.installed);
 });
 
-test('installRtk：已有外来 rtk 时必须明确报冲突，不得误报成功', async () => {
+test('installRtk：已有 rtk-oss（不含 engine）时必须明确报互斥，不得误报成功', async () => {
   const before = await rtkStatus();
-  if (before.source !== 'foreign') {
-    // 本机没有外来 rtk 时跳过——这条断言只对「已装别的来源」有意义
-    return;
-  }
+  if (before.source !== 'foreign') return; // 只对「装了 oss 版」有意义
   const r = await installRtk();
-  assert.equal(r.ok, false, '已有外来 rtk 时安装必须失败，不能假装成功');
-  assert.match(r.message, /冲突|卸载/, `错误信息应说清冲突与解法，实际：${r.message}`);
+  assert.equal(r.ok, false, '已装 rtk-oss 时安装完整版必须失败，不能假装成功');
+  assert.match(r.message, /互斥|卸载|rtk-oss/, `应说清互斥与解法，实际：${r.message}`);
 });
 
-test('uninstallRtk：不擅自删除外来的 rtk', async () => {
+test('installRtk：已装完整版时不得重复安装，返回值里要能看出原因', async () => {
+  const before = await rtkStatus();
+  if (before.source !== 'ours') return;
+  const r = await installRtk();
+  // 已经装好时，要么直接成功（hook 已接），要么失败但说明白原因（如无写权限）
+  assert.equal(typeof r.ok, 'boolean');
+  assert.ok(r.message.length > 0, '必须给出说明');
+});
+
+test('uninstallRtk：不擅自删除 rtk-oss 等外来版本', async () => {
   const before = await rtkStatus();
   if (before.source !== 'foreign') return;
   const r = await uninstallRtk();

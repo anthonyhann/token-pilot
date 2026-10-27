@@ -396,10 +396,10 @@ fn rtk_state() -> (String, String) {
             Some(v) => {
                 let ours = run_capture(
                     "winget",
-                    &["list", "--id", "rtk-ai.rtk-oss", "-e", "--accept-source-agreements"],
+                    &["list", "--id", "rtk-ai.rtk", "-e", "--accept-source-agreements"],
                     30,
                 )
-                .map(|o| o.contains("rtk-ai.rtk-oss"))
+                .map(|o| o.contains("rtk-ai.rtk"))
                 .unwrap_or(false);
                 (if ours { "ours".into() } else { "foreign".into() }, v)
             }
@@ -411,10 +411,10 @@ fn rtk_state() -> (String, String) {
             Some(v) => v,
             None => return ("none".into(), String::new()),
         };
-        if brew_has("rtk-oss") {
+        if brew_has("rtk") {
             ("ours".into(), ver)
         } else {
-            // brew 主仓库的 rtk，或手动安装
+            // rtk-oss（不含压缩引擎），或手动安装的其它来源
             ("foreign".into(), ver)
         }
     }
@@ -450,16 +450,57 @@ fn install_rtk() -> (bool, String) {
     )
     .is_some();
     #[cfg(not(target_os = "windows"))]
-    let ok = run_capture("brew", &["install", "rtk-ai/tap/rtk-oss"], 300).is_some();
+    let ok = run_capture("brew", &["install", "rtk"], 300).is_some();
 
     if !ok {
         return (false, "安装命令执行失败（brew/winget 返回非 0），请检查网络或手动安装 rtk-oss".into());
     }
     let (source2, version2) = rtk_state();
-    if source2 == "ours" {
-        (true, format!("RTK 已安装（{version2}）"))
-    } else {
-        (false, "安装命令执行完了但检测到的 rtk 来源不对，请手动检查".into())
+    if source2 != "ours" {
+        return (false, "安装命令执行完了但检测到的 rtk 来源不对，请手动检查".into());
+    }
+    // 二进制就绪后接入 Claude Code hook（rtk init -g 会 patch ~/.claude/settings.json）
+    match ensure_rtk_init() {
+        Ok(()) => (true, format!("RTK 已安装并接入（{version2}）")),
+        Err(e) => (false, format!("RTK 已安装，但接入失败：{e}")),
+    }
+}
+
+/// 确保 rtk 的 PreToolUse hook 接进 Claude Code。
+/// 先备份 settings.json —— 用户可能已配几十条别的 hook，写坏了影响所有会话。
+fn ensure_rtk_init() -> Result<(), String> {
+    let settings = home_dir().join(".claude").join("settings.json");
+    let backup = home_dir()
+        .join(".claude")
+        .join(format!("settings.json.bak-tokenpilot-{}", std::process::id()));
+
+    if settings.exists() {
+        let _ = fs::copy(&settings, &backup);
+    }
+
+    // --auto-patch：后端没有 TTY，不加会卡在交互确认上
+    let ok = run_capture("rtk", &["init", "-g", "--auto-patch"], 90).is_some();
+    if !ok {
+        restore(&settings, &backup);
+        return Err("rtk init -g 执行失败，已还原配置".into());
+    }
+    // 校验仍是合法 JSON
+    if settings.exists() {
+        let valid = fs::read_to_string(&settings)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .is_some();
+        if !valid {
+            restore(&settings, &backup);
+            return Err("rtk init 写坏了 settings.json，已从备份还原".into());
+        }
+    }
+    Ok(())
+}
+
+fn restore(settings: &PathBuf, backup: &PathBuf) {
+    if backup.exists() {
+        let _ = fs::copy(backup, settings);
     }
 }
 
@@ -478,7 +519,8 @@ fn uninstall_rtk() -> (bool, String) {
     #[cfg(target_os = "windows")]
     let ok = run_capture("winget", &["uninstall", "--id", "rtk-ai.rtk-oss", "-e"], 180).is_some();
     #[cfg(not(target_os = "windows"))]
-    let ok = run_capture("brew", &["uninstall", "rtk-oss"], 180).is_some();
+    let _ = run_capture("rtk", &["init", "-g", "--uninstall"], 60);
+    let ok = run_capture("brew", &["uninstall", "rtk"], 180).is_some();
 
     if !ok {
         return (false, "卸载命令执行失败，请手动执行 brew uninstall rtk-oss".into());
