@@ -152,12 +152,46 @@ fn spawn_sync_with(done: Option<Box<dyn FnOnce() + Send + 'static>>) {
         .stderr(Stdio::null())
         .spawn();
     #[cfg(not(target_os = "windows"))]
-    let spawned = Command::new("token-pilot")
-        .arg("sync")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
+    // 同样受 GUI PATH 限制：token-pilot 常在 /opt/homebrew/bin 或 ~/.nvm 下，
+    // GUI 启动时找不到 → sync 静默不执行 → 看板数据一直不更新
+    let spawned = match resolve_bin("token-pilot") {
+        Some(bin) => Command::new(bin)
+            .arg("sync")
+            .env("PATH", gui_safe_path())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn(),
+        None => {
+            // 兜底：按 node 全局布局猜几个常见位置
+            let mut tried = None;
+            for p in [
+                "/opt/homebrew/bin/token-pilot",
+                "/usr/local/bin/token-pilot",
+            ] {
+                if std::path::Path::new(p).exists() {
+                    tried = Command::new(p)
+                        .arg("sync")
+                        .env("PATH", gui_safe_path())
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .ok();
+                    if tried.is_some() {
+                        break;
+                    }
+                }
+            }
+            match tried {
+                Some(c) => Ok(c),
+                None => Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "token-pilot not found in GUI PATH",
+                )),
+            }
+        }
+    };
     if let Ok(mut child) = spawned {
         std::thread::spawn(move || {
             let _ = child.wait();
@@ -349,10 +383,62 @@ fn open_dashboard(app: tauri::AppHandle) {
 // rtk-oss 与 brew 主仓库的 rtk 都占用 `rtk` 二进制，brew formula 里声明了
 // conflicts_with，所以装了别的来源时必须先卸载才能装 rtk-oss。
 
+/// GUI 应用启动时 PATH 只有 /usr/bin:/bin:/usr/sbin:/sbin，
+/// 不包含 /opt/homebrew/bin（Apple Silicon）或 /usr/local/bin（Intel），
+/// 于是 Command::new("brew") / ("rtk") 直接失败。
+///
+/// 这是 macOS 上从 Finder/Dock 启动的 app 的固有限制——终端里能用是因为 shell
+/// 读过了 profile。踩过一次：用户明明装了 rtk 1.1.0，却报「安装命令执行失败」。
+fn gui_safe_path() -> String {
+    let cur = std::env::var("PATH").unwrap_or_default();
+    let mut parts: Vec<String> = cur.split(':').filter(|s| !s.is_empty()).map(String::from).collect();
+
+    // Homebrew（Apple Silicon / Intel 两种前缀）+ 常见用户 bin
+    let extra = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/local/sbin"];
+    for e in extra {
+        if std::path::Path::new(e).exists() && !parts.iter().any(|p| p == e) {
+            parts.push(e.to_string());
+        }
+    }
+    // cargo / rustup 安装的二进制（rtk 也可能走这里）
+    if let Ok(home) = std::env::var("HOME") {
+        for rel in [".cargo/bin", ".local/bin"] {
+            let p = format!("{home}/{rel}");
+            if std::path::Path::new(&p).exists() && !parts.iter().any(|x| x == &p) {
+                parts.push(p);
+            }
+        }
+    }
+    parts.join(":")
+}
+
+/// 解析可执行文件的绝对路径：优先用补全后的 PATH 查找。
+/// 找到就返回绝对路径，避免依赖调用方进程的 PATH。
+fn resolve_bin(cmd: &str) -> Option<std::path::PathBuf> {
+    // 已经是绝对路径直接用
+    let as_path = std::path::Path::new(cmd);
+    if as_path.is_absolute() {
+        return if as_path.exists() { Some(as_path.to_path_buf()) } else { None };
+    }
+    for dir in gui_safe_path().split(':') {
+        if dir.is_empty() {
+            continue;
+        }
+        let cand = std::path::Path::new(dir).join(cmd);
+        if cand.is_file() {
+            return Some(cand);
+        }
+    }
+    None
+}
+
 fn run_capture(cmd: &str, args: &[&str], timeout_secs: u64) -> Option<String> {
     // 单次执行 + 超时轮询。注意不能"轮询完再执行一遍拿输出"——那会把 brew 跑两次。
-    let mut child = Command::new(cmd)
+    // GUI 启动时 PATH 缺 /opt/homebrew/bin，直接 Command::new("brew") 会失败
+    let bin = resolve_bin(cmd)?;
+    let mut child = Command::new(&bin)
         .args(args)
+        .env("PATH", gui_safe_path())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -457,7 +543,21 @@ fn install_rtk() -> (bool, String) {
     let ok = run_capture("brew", &["install", "rtk"], 300).is_some();
 
     if !ok {
-        return (false, "安装命令执行失败（brew/winget 返回非 0），请检查网络或手动安装 rtk-oss".into());
+        // 防御：brew 可能因为锁文件/网络等原因返回非 0，但包其实已经装着
+        // （踩过：rtk 1.1.0 明明装好，brew 因 lock 权限返回非 0，被误报成安装失败）
+        let (s_after, v_after) = rtk_state();
+        if s_after == "ours" {
+            return match ensure_rtk_init() {
+                Ok(()) => (true, format!("RTK 已安装并接入（{v_after}）")),
+                Err(e) => (false, format!("RTK 已安装，但接入失败：{e}")),
+            };
+        }
+        return (
+            false,
+            format!(
+                "安装命令执行失败（brew/winget 返回非 0）。当前状态：{s_after}。请检查网络，或手动执行 brew install rtk"
+            ),
+        );
     }
     let (source2, version2) = rtk_state();
     if source2 != "ours" {
@@ -995,4 +1095,38 @@ mod updater_tests {
         };
         assert!(status.starts_with("上次检查失败"));
     }
+
+    #[test]
+    fn gui_path_includes_homebrew_when_present() {
+        // 模拟 GUI 启动的精简 PATH
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        let p = gui_safe_path();
+        if std::path::Path::new("/opt/homebrew/bin").exists() {
+            assert!(p.contains("/opt/homebrew/bin"), "应补上 Homebrew 路径，实际：{p}");
+        }
+        if std::path::Path::new("/usr/local/bin").exists() {
+            assert!(p.contains("/usr/local/bin"), "应补上 /usr/local/bin，实际：{p}");
+        }
+        assert!(p.contains("/usr/bin"), "原有路径不能丢");
+    }
+
+    #[test]
+    fn resolve_bin_finds_brew_despite_gui_path() {
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        // 本机装了 brew 的话必须能找到；没装则跳过
+        if std::path::Path::new("/opt/homebrew/bin/brew").exists()
+            || std::path::Path::new("/usr/local/bin/brew").exists()
+        {
+            let r = resolve_bin("brew");
+            assert!(r.is_some(), "GUI PATH 下也必须能解析到 brew");
+            assert!(r.unwrap().is_absolute(), "应返回绝对路径");
+        }
+    }
+
+    #[test]
+    fn resolve_bin_returns_none_for_missing() {
+        std::env::set_var("PATH", "/usr/bin:/bin");
+        assert!(resolve_bin("definitely-not-a-real-binary-xyz").is_none());
+    }
+
 }
