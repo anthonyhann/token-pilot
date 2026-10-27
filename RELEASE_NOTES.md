@@ -10,6 +10,14 @@ CI 只认**行首**的 `## vX.Y.Z` 标题，找不到或段落为空都会让发
 
 ---
 
+## v0.3.2
+
+- RTK 输出压缩层改用**含压缩引擎的完整版**（原先装的是 rtk-oss，砍掉了 engine，压缩能力弱一档）
+- 勾选后自动执行 `rtk init -g` 接入 Claude Code hook，装完即生效，不用再手动配置
+- 改动 `~/.claude/settings.json` 前自动备份，失败或写坏 JSON 会还原，不影响你已有的其他 hook
+- RTK 安装修四个问题：桌面端勾选此前完全无效、与已有 rtk 冲突时误报成功、失败原因被吞、卸载会误删别人的 rtk
+- 新增 GitHub 发布数据回流脚本 `scripts/publish-metrics.py`（star/浏览/克隆/npm 下载按天采集）
+
 ## v0.3.1
 
 - 修 npm 包名：改回 `@anthonyhan/token-pilot`（与 npm 账号一致；上一版误改成多一个 n 的 scope，npm 上并不存在，照 README 安装会 404）
