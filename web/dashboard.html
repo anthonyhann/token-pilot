@@ -333,6 +333,23 @@ footer .notes{max-width:560px}
 .m-row input:focus-visible{outline:2px solid var(--info);outline-offset:1px}
 .m-headr{color:var(--muted);font-size:10.5px;font-weight:700}
 .addrow{color:var(--info);font-weight:700;font-size:12px;padding:4px 0}
+
+/* 设置项：复选框 + 标题 + 说明的三层结构 */
+.opt{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;margin:2px 0;border:1px solid transparent;border-radius:9px;cursor:pointer;transition:background .14s var(--ease),border-color .14s var(--ease)}
+.opt:hover{background:color-mix(in oklab,var(--fg) 4%,transparent);border-color:var(--border)}
+.opt input[type="checkbox"]{width:15px;height:15px;margin:1px 0 0;flex:none;accent-color:var(--info);cursor:pointer}
+.opt-main{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.opt-title{font-size:12.5px;font-weight:700;line-height:1.45;display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--fg)}
+.opt-desc{font-size:11.5px;color:color-mix(in oklab,var(--muted) 78%,var(--fg));line-height:1.7}
+.opt-desc code{font-size:11px;background:color-mix(in oklab,var(--fg) 7%,transparent);border-radius:4px;padding:1px 4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.opt-badge{font-size:10px;font-weight:700;color:var(--pos);background:color-mix(in oklab,var(--pos) 13%,transparent);border-radius:5px;padding:1px 6px;letter-spacing:.2px}
+.opt-status{font-size:11px;font-weight:600;color:var(--muted)}
+/* 带输入框的选项行：与复选框行左对齐（15px 复选框 + 10px gap = 25px） */
+.opt-field{display:flex;align-items:center;gap:8px;padding:2px 10px 8px 35px;margin:0}
+.opt-field .opt-title{font-size:12.5px;font-weight:700;flex:none}
+.opt-field input{width:96px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px;color:var(--fg)}
+.opt-field input:focus-visible{outline:2px solid var(--info);outline-offset:1px}
+.opt-unit{font-size:11.5px;color:var(--muted)}
 .delrow{color:var(--muted);border:0;background:none;cursor:pointer;font-size:14px;line-height:1;padding:2px}
 .modal-foot{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid var(--gridln)}
 .saved-hint{color:var(--pos-text);font-size:12px;font-weight:700;opacity:0;transition:opacity .2s var(--ease)}
@@ -666,23 +683,36 @@ footer .notes{max-width:560px}
         </div>
         <div class="m-sec">
           <div class="m-lab">自动压缩 <span>超阈值的活跃会话提醒/处理</span></div>
-          <div class="m-row" style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="mAutoCompact" aria-label="开启自动压缩" style="width:auto">
-            <label for="mAutoCompact" style="font-size:12px">开启（会话上下文超阈值时系统通知提醒）</label>
+
+          <label class="opt" for="mAutoCompact">
+            <input type="checkbox" id="mAutoCompact" aria-label="开启自动压缩">
+            <span class="opt-main">
+              <span class="opt-title">开启自动压缩</span>
+              <span class="opt-desc">会话上下文超过阈值时发系统通知提醒</span>
+            </span>
+          </label>
+
+          <div class="opt-field">
+            <span class="opt-title">提醒阈值</span>
+            <input id="mCompactK" type="number" min="20" step="10" placeholder="100" aria-label="压缩阈值（千 tokens）">
+            <span class="opt-unit">K tokens</span>
           </div>
-          <div class="m-row" style="display:flex;align-items:center;gap:8px;margin-top:6px">
-            <span style="font-size:12px;color:var(--muted);white-space:nowrap">阈值（K tokens）</span>
-            <input id="mCompactK" type="number" min="20" step="10" placeholder="100" aria-label="压缩阈值（千 tokens）" style="width:90px">
-          </div>
-          <div class="m-row" style="display:flex;align-items:center;gap:8px;margin-top:6px">
-            <input type="checkbox" id="mApplyCc" aria-label="同时写入 Claude Code 自动压缩配置" style="width:auto">
-            <label for="mApplyCc" style="font-size:12px">同时写入 Claude Code 的 autoCompactEnabled（改宿主配置，影响新会话）</label>
-          </div>
-          <div class="m-row" style="display:flex;align-items:center;gap:8px;margin-top:6px">
-            <input type="checkbox" id="mInstallRtk" aria-label="安装 RTK 输出压缩层" style="width:auto">
-            <label for="mInstallRtk" style="font-size:12px">安装 RTK 输出压缩层（含压缩引擎，brew/winget）<span id="rtkStatus" style="color:var(--muted);margin-left:6px"></span></label>
-            <div style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.6">勾选后点「保存」才会真正执行：安装 rtk 并自动执行 <code>rtk init -g</code> 接入 Claude Code hook（会修改 ~/.claude/settings.json，已做备份）。若系统里已装有 rtk-oss，需先卸载（两者占用同一命令、会冲突）。</div>
-          </div>
+
+          <label class="opt" for="mApplyCc">
+            <input type="checkbox" id="mApplyCc" aria-label="同时写入 Claude Code 自动压缩配置">
+            <span class="opt-main">
+              <span class="opt-title">同时写入 Claude Code 的 autoCompactEnabled</span>
+              <span class="opt-desc">会修改宿主配置，对之后新建的会话生效</span>
+            </span>
+          </label>
+
+          <label class="opt" for="mInstallRtk">
+            <input type="checkbox" id="mInstallRtk" aria-label="安装 RTK 输出压缩层">
+            <span class="opt-main">
+              <span class="opt-title">安装 RTK 输出压缩层 <span class="opt-badge">含压缩引擎</span><span id="rtkStatus" class="opt-status"></span></span>
+              <span class="opt-desc">勾选后点「保存」才执行：装 rtk 并自动跑 <code>rtk init -g</code> 接入 Claude Code hook。会修改 <code>~/.claude/settings.json</code>（已做备份可还原）。若系统里已有 rtk-oss，需先卸载，两者互斥。</span>
+            </span>
+          </label>
         </div>
       </div>
       <div class="modal-foot"><span class="saved-hint" id="saveHint">已保存</span><button class="btn-ghost" id="settingsSave" type="button">保存</button></div>
