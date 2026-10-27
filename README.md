@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/icon.png" width="96" alt="token-pilot —— 所有 AI 工具的本地账单，本月实测 ¥2,546 / 810M tokens">
+<img src="docs/assets/icon.png" width="96" alt="token-pilot —— 所有 AI 工具的本地账单，本月实测 ¥7,328 / 38 亿 tokens">
 
 # token-pilot ⚡
 
@@ -21,7 +21,7 @@
 
 ![状态栏面板](docs/assets/menubar-panel.png)
 
-> 状态栏常驻 `⚡ ¥今日 · 预算%`。左键弹面板，「打开完整看板」看全部。我的真实 10 月：**810M tokens · ¥2,546 · 12,685 次调用**（[怎么算的](#-数据准确性)）。
+> 状态栏常驻 `⚡ ¥今日 · 预算%`。左键弹面板，「打开完整看板」看全部。我的真实 10 月：**38.1 亿 tokens · ¥7,328 · 27,450 次调用**（[怎么算的](#-数据准确性)）。
 
 > ⚠️ npm 上另有一个**别人家的** `token-pilot`（MCP 代码导航工具，会往 Claude Code 写 hooks）。我们的包是 **`@anthonyhan/token-pilot`**，下面命令都带 scope，照抄即可。
 
@@ -83,7 +83,7 @@ xattr -dr com.apple.quarantine /Applications/token-pilot.app
 ```bash
 python3 scripts/reconcile.py month    # 第三方视角独立重算原始日志，与 CLI 逐项对账
 python3 scripts/verify-dashboard.py   # 看板 36 项算法不变量校验
-npm test                              # 42 个单元测试（定价/采集口径/聚合/注入/熔断）
+npm test                              # 49 个单元测试（定价/采集口径/聚合/注入/熔断/RTK）
 ```
 
 实测修过的口径坑（2026-10-21，本机 4787 个日志文件）：
@@ -96,8 +96,8 @@ npm test                              # 42 个单元测试（定价/采集口径
 
 ## 📊 凭什么信我
 
-- 我自己的 AI 账单就是它管的：本月 **¥2,546 / 810M tokens**（2026-10-21，上方截图即本机实时数据）
-- 36 项看板算法不变量 + 42 个单测 + 独立对账脚本，全部开箱可跑
+- 我自己的 AI 账单就是它管的：本月 **¥7,328 / 38.1 亿 tokens**（2026-10-27 本机实时数据）
+- 36 项看板算法不变量 + 49 个单测 + 独立对账脚本，全部开箱可跑
 - 诚实披露速率口径：日志按「调用完成时刻」记账，生成中的调用完成前不计入（看板内有注明）
 
 ## ⚠️ 什么时候别用它
@@ -128,6 +128,10 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 
 完整分版本说明见 [RELEASE_NOTES.md](RELEASE_NOTES.md)（也是客户端自动更新弹窗的文案来源）。
 
+- **v0.3.2** RTK 改用含压缩引擎的完整版，装完自动接 hook（备份/回滚保护）；新增发布数据回流脚本
+- **v0.3.1** npm 包缺 web 目录修复、看板前端编入 app 二进制
+- **v0.3.0** 新增「压缩潜力」板块，修省钱建议卡被静默丢弃
+- **v0.2.9** 自动发布链路修复（三平台产物上传与命名）
 - **v0.2.6** 激活自动更新链路 + 打转熔断主动通知（含防轰炸）
 - **v0.2.5** npm scope 校正为 `@anthonyhann`，包可运行性修复
 - **v0.2.3** 2B 压缩执行第一层（自动压缩 + autoCompact 写入 + RTK）、价格核对台

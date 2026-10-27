@@ -33,7 +33,7 @@ token-pilot month
 
 - `python3 scripts/reconcile.py month` — 独立重算原始日志对账
 - `python3 scripts/verify-dashboard.py` — 36 项看板算法不变量
-- `npm test` — 42 个单元测试（用 `TOKEN_PILOT_HOME` 隔离状态目录，不碰真实配置）
+- `npm test` — 49 个单元测试（用 `TOKEN_PILOT_HOME` 隔离状态目录，不碰真实配置）
 
 ## 仓库
 

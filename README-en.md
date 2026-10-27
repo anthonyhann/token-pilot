@@ -21,7 +21,7 @@ For anyone running Claude Code / Codex / Kimi Code with Chinese models (DeepSeek
 
 ![Menubar panel](docs/assets/menubar-panel.png)
 
-> Lives in your menubar as `⚡ ¥today · budget%`. Left-click for the panel, "Open dashboard" for the full picture. My real October: **810M tokens · ¥2,546 · 12,685 calls** ([how we know](#-data-accuracy)).
+> Lives in your menubar as `⚡ ¥today · budget%`. Left-click for the panel, "Open dashboard" for the full picture. My real October: **3.81B tokens · ¥7,328 · 27,450 calls** ([how we know](#-data-accuracy)).
 
 > ⚠️ npm 上另有一个**别人家的** `token-pilot`（MCP 代码导航工具，会往 Claude Code 写 hooks）。我们的包是 **`@anthonyhan/token-pilot`**，下面命令都带 scope，照抄即可。
 
@@ -78,7 +78,7 @@ A billing tool that's wrong is worse than none. Accuracy here is **verifiable**:
 ```bash
 python3 scripts/reconcile.py month    # independent third-party recount of raw logs vs CLI
 python3 scripts/verify-dashboard.py   # 36 dashboard algorithm invariants
-npm test                              # 23 unit tests (pricing / collection / aggregation)
+npm test                              # 49 unit tests (pricing / collection / aggregation / breaker / RTK)
 ```
 
 Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
@@ -91,8 +91,8 @@ Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
 
 ## 📊 Why trust me
 
-- It runs my own AI bill: **¥2,546 / 810M tokens** this month (2026-10-21, screenshots above are my live data)
-- 36 dashboard invariants + 23 unit tests + an independent reconciliation script — all runnable out of the box
+- It runs my own AI bill: **¥7,328 / 3.81B tokens** this month (2026-10-27, screenshots above are my live data)
+- 36 dashboard invariants + 49 unit tests + an independent reconciliation script — all runnable out of the box
 - Honest about rate accounting: logs book tokens at call-completion time; in-flight generations aren't counted until they finish (noted in the dashboard)
 
 ## ⚠️ When NOT to use it
