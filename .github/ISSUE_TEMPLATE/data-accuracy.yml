@@ -1,0 +1,52 @@
+---
+name: 数据不准 / 算错钱
+about: 某个模型的 token 数或金额和预期不符（这是对本项目最有价值的报告）
+title: "[数据] "
+labels: ["bug"]
+---
+
+<!--
+  账单工具里，数据错了比功能少严重得多。所以这份模板问得细一点，
+  目的是让我能直接复现，而不是来回追问三轮。
+-->
+
+## 哪里不对
+
+**宿主**（Claude Code / Codex / Kimi Code / OpenCode / …）：
+
+**模型名**（日志里的原始写法，例如 `deepseek-v4.1-flash`）：
+
+**时间范围**（例如 2026-10-01 ~ 2026-10-27）：
+
+## 期望 vs 实际
+
+| | token 数 | 金额 |
+|---|---|---|
+| 你期望的 | | |
+| token-pilot 算出的 | | |
+
+期望值是怎么得到的？（官方账单页 / 自己按定价算 / 其他工具）
+
+## 原始日志片段
+
+<!--
+  ⚠️ 提交前请删掉 prompt 和回复内容，只保留 usage 相关的数字。
+  这个项目承诺数据不出本机，也请别把完整会话贴到公开 issue 里。
+-->
+
+```json
+{
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0
+  }
+}
+```
+
+## 环境
+
+- token-pilot 版本（`token-pilot --version` 或 package.json）：
+- 操作系统：
+- Node 版本：

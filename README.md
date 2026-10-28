@@ -13,7 +13,7 @@
 [![Tests](https://img.shields.io/badge/tests-42%20passing-brightgreen)](tests/)
 [![Accuracy](https://img.shields.io/badge/对账脚本-逐项一致-blue)](#-数据准确性)
 
-[快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [TODO](#-todo-list) · [English](README-en.md) · [llms.txt](llms.txt)
+[快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [贡献](CONTRIBUTING.md) · [TODO](#-todo-list) · [English](README-en.md) · [llms.txt](llms.txt)
 
 </div>
 
@@ -60,7 +60,22 @@ xattr -dr com.apple.quarantine /Applications/token-pilot.app
 
 自己构建：`cd menubar && npm install && npx tauri build`
 
-## ✨ 它能做什么
+## 🎯 为什么做这个
+
+我同时用 Claude Code、Codex 和 Kimi Code 跑国产模型，账单散在三个地方：Claude 记一笔、Codex 记一笔、Kimi 记一笔，没有一个地方能回答「这个月总共烧了多少」。
+
+试过几个现有方案，都不合用：
+
+| 方案 | 国产模型 | 只读本地 | 状态栏 | 卡在哪 |
+|---|---|---|---|---|
+| ccusage | 部分 | ✅ | ❌ | 以 Claude Code 为主，`deepseek-v4.1-flash` 这类模型的归一路径不全 |
+| 各工具自带用量页 | ✅ | — | ❌ | 每个工具各看各的，没法合并成一张账单 |
+| 商业账单 / 代理类工具 | ❌ | ❌ | ✅ | 要把日志或请求过一遍云端，我不放心把完整会话历史交出去 |
+| **token-pilot** | **9 家** | **✅** | **✅** | — |
+
+核心区别只有一句：**它把国产模型和海外模型放在同一张账单里，而且全程不出本机。**
+
+## ✨ 功能清单：它能做什么
 
 | 场景 | 你说 | 它做 |
 |---|---|---|

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>token-pilot — 所有 AI 工具的本地账单</title>
+<meta name="description" content="同时用 Claude Code / Codex / Kimi Code 跑国产模型的人，终于能答上「这个月给 AI 烧了多少钱」——只读本地日志，数据不出本机。">
+<meta property="og:title" content="token-pilot — 所有 AI 工具的本地账单">
+<meta property="og:description" content="本地只读日志，把 Claude Code / Codex / Kimi Code 和 9 家国产模型合成一张账单。">
+<meta property="og:image" content="./dashboard.png">
+<link rel="icon" href="./icon.png">
+<style>
+  :root{
+    --bg:#faf9f7; --fg:#1c1b22; --muted:#6b6a7a; --line:#e8e6e1; --card:#fff;
+    --accent:#e8683c; --ok:#2f9e5e;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#16151a; --fg:#eeedf2; --muted:#9a98a8; --line:#2a2833; --card:#1e1d24; --accent:#ff7a4d; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding:56px 24px 80px}
+  header{text-align:center;margin-bottom:44px}
+  .logo{width:76px;height:76px;margin-bottom:18px}
+  h1{font-size:clamp(28px,5vw,42px);line-height:1.2;margin:0 0 14px;letter-spacing:-.02em;font-weight:800}
+  .tagline{font-size:clamp(15px,2.2vw,18px);color:var(--muted);margin:0 auto;max-width:620px}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:28px}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14.5px;transition:transform .15s,opacity .15s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-ghost{border:1px solid var(--line);color:var(--fg);background:var(--card)}
+  .shot{margin:44px 0;border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:0 18px 50px -22px rgba(0,0,0,.28)}
+  .shot img{display:block;width:100%;height:auto;max-height:520px;object-fit:cover;object-position:top}
+  .shot-cap{text-align:center;color:var(--muted);font-size:13px;margin-top:12px}
+  h2{font-size:21px;margin:52px 0 18px;font-weight:800;letter-spacing:-.01em}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+  .card h3{margin:0 0 7px;font-size:14.5px;font-weight:800}
+  .card p{margin:0;color:var(--muted);font-size:13.5px}
+  pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.75}
+  code{font-family:var(--mono);font-size:.92em}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:26px 0}
+  .stat{text-align:center;padding:18px 10px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+  .stat b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em}
+  .stat span{color:var(--muted);font-size:12.5px}
+  footer{margin-top:64px;padding-top:26px;border-top:1px solid var(--line);text-align:center;color:var(--muted);font-size:13px}
+  footer a{color:var(--accent);text-decoration:none}
+  a{color:var(--accent)}
+  .note{font-size:12.5px;color:var(--muted);text-align:center;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <img class="logo" src="./icon.png" alt="token-pilot">
+    <h1>所有 AI 工具的本地账单<br>一抬头就看见</h1>
+    <p class="tagline">同时用 Claude Code / Codex / Kimi Code 跑国产模型的人，终于能答上「这个月给 AI 烧了多少钱」。</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/anthonyhann/token-pilot">在 GitHub 查看 →</a>
+      <a class="btn btn-ghost" href="https://github.com/anthonyhann/token-pilot/releases/latest">下载安装包</a>
+    </div>
+    <p class="note">只读本地日志 · 数据不出本机 · MIT 开源</p>
+  </header>
+
+  <div class="shot">
+    <img src="./dashboard.png" alt="token-pilot 看板：本月花费、缓存命中、压缩潜力、宿主与模型排行">
+  </div>
+  <p class="shot-cap">本地看板：本月花费、缓存省下多少、压缩潜力、宿主与模型排行</p>
+
+  <h2>它解决什么问题</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>把账单合成一张</h3>
+      <p>Claude Code、Codex、Kimi Code、OpenCode 的用量合并展示，不用在四个终端里各跑一遍。</p>
+    </div>
+    <div class="card">
+      <h3>国产模型也能算对</h3>
+      <p>DeepSeek / GLM / Kimi / Qwen / MiniMax / 混元 / MiMo / LongCat / Doubao 九家定价归一。</p>
+    </div>
+    <div class="card">
+      <h3>状态栏常驻</h3>
+      <p>菜单栏直接显示 <code>¥今日 · 预算%</code>，超支弹通知。macOS + Windows。</p>
+    </div>
+    <div class="card">
+      <h3>告诉你钱浪费在哪</h3>
+      <p>揪出反复重读同一段输出的会话，按会话列出各浪费了多少钱。</p>
+    </div>
+  </div>
+
+  <h2>我自己的真实账单</h2>
+  <div class="stats">
+    <div class="stat"><b>¥7,328</b><span>本月花费</span></div>
+    <div class="stat"><b>38.1 亿</b><span>tokens</span></div>
+    <div class="stat"><b>27,450</b><span>次调用</span></div>
+    <div class="stat"><b>¥24,082</b><span>缓存帮我省下</span></div>
+  </div>
+  <p class="note">2026-10 本机实测。缓存省下的钱是实际花掉的三倍多。</p>
+
+  <h2>装上</h2>
+<pre><code># 命令行 + 本地看板
+npm install -g @anthonyhan/token-pilot
+token-pilot month
+
+# 状态栏应用（macOS）
+brew install --cask anthonyhann/token-pilot/token-pilot</code></pre>
+
+  <h2>什么时候别用它</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>想拦在请求前面</h3>
+      <p>它是事后分析，不拦截请求。要节流得靠代理层，这还没做。</p>
+    </div>
+    <div class="card">
+      <h3>桌面订阅端</h3>
+      <p>Kimi.app / ChatGPT.app 不写本地用量日志，只能登记固定月费。</p>
+    </div>
+    <div class="card">
+      <h3>不写日志的工具</h3>
+      <p>Antigravity / Copilot / Cursor 等 12 款只能检测到装没装，读不到 token。</p>
+    </div>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/anthonyhann/token-pilot">GitHub</a> · <a href="https://www.npmjs.com/package/@anthonyhan/token-pilot">npm</a> · <a href="https://x.com/AnthonyHan_">X @AnthonyHan_</a></p>
+    <p>MIT License · 一个在西安远程的人 + 几个 AI Agent 做的</p>
+  </footer>
+
+</div>
+</body>
+</html>
