@@ -10,5 +10,6 @@ docs/*
 # GitHub Pages 站点（放在 docs/ 是 Pages 分支源唯一支持的目录之一）
 !docs/index.html
 !docs/dashboard.png
+!docs/hero.png
 !docs/icon.png
 !docs/menubar-panel.png
