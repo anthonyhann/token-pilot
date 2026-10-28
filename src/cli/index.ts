@@ -290,10 +290,18 @@ async function main() {
   if (cmd === 'dash') return cmdDash();
   if (cmd === 'prices') return cmdPrices();
   if (cmd === 'compress-report') return cmdCompressReport();
+  if (cmd === 'doctor') {
+    const { runDoctor, formatDoctor } = await import('../core/doctor.js');
+    const report = await runDoctor();
+    console.log(formatDoctor(report));
+    // 有 error 时返回非 0，方便脚本判断
+    if (report.error > 0) process.exitCode = 1;
+    return;
+  }
   if (cmd === 'today' || cmd === 'month' || cmd === 'report' || cmd === 'all') {
     return cmdReport(cmd === 'all' ? 'all' : cmd);
   }
-  console.log('用法：token-pilot [today|month|report|sync|dash|serve]');
+  console.log('用法：token-pilot [today|month|report|sync|dash|serve|prices|doctor]');
 }
 
 main().catch((e) => {

@@ -21,6 +21,7 @@ token-pilot month
 - `token-pilot sync` — 刷新 ~/.token-pilot/dashboard-data.json（增量缓存，热跑 <1s）
 - `token-pilot serve` — 本地看板 http://127.0.0.1:17895（10s 自刷新，可选）
 - `token-pilot dash` — 静态看板 ~/.token-pilot/dashboard.html
+- `token-pilot doctor` — 环境自检：哪些宿主可读、数据是否新鲜、定价覆盖度、配置是否合法
 
 ## 数据口径
 

@@ -121,6 +121,21 @@ npm test                              # 49 个单元测试（定价/采集口径
 - **桌面订阅 App**（Kimi.app / ChatGPT.app）——不按 token 计费，只能登记固定月费
 - **想拦在请求前面节流**——它是事后分析，不拦截请求（拦截需要代理层，在 Roadmap）
 
+## 🧩 它和别的工具有什么不同
+
+省 token 这件事分好几个环节，token-pilot 只做其中一环——**算清楚钱**。想省得更多，通常要几个工具配合：
+
+| 环节 | 谁负责 | 典型效果 |
+|---|---|---|
+| **花了多少钱** | **token-pilot**（本工具） | 多宿主合并账单、预算告警、算出浪费了多少 |
+| 命令输出太大 | [RTK](https://www.rtk-ai.app/) 输出压缩层 | 已内置支持，看板勾选即可装 |
+| 读代码浪费上下文 | AST 结构化读取类工具（见下） | 大文件从「整篇读」变成「先看结构，再读需要的符号」|
+| 模型回复太长 | 精简输出类 skill | 只影响输出 token，与输入侧不重叠 |
+
+**关于重名：** npm 上有一个**同名的 `token-pilot`**（[Digital-Threads/token-pilot](https://github.com/Digital-Threads/token-pilot)），它做的是上面第三行那件事——用 AST 让 AI 少读代码。**它不统计花费，本工具也不读代码结构**，两者解决的是同一个成本问题的不同环节，可以一起用。
+
+本工具的正确包名是带 scope 的 **`@anthonyhan/token-pilot`**，安装命令都在上面，照抄即可。
+
 ## 💬 参与讨论
 
 - **[Discussions](https://github.com/anthonyhann/token-pilot/discussions)** ——「这个模型算得对不对」「能不能支持某某工具」这类问题放这里，比开 issue 合适

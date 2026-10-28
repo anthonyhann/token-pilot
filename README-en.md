@@ -101,6 +101,21 @@ Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
 - **Desktop subscription apps** (Kimi.app / ChatGPT.app) — not per-token billed; tracked as fixed monthly fees only
 - **You want to throttle requests before they happen** — it's after-the-fact analysis, not a proxy (a routing layer is on the roadmap)
 
+## 🧩 How it differs from other tools
+
+Cutting token spend has several distinct layers, and token-pilot only owns one of them — **the money**:
+
+| Layer | Who handles it | Typical effect |
+|---|---|---|
+| **How much you spend** | **token-pilot** (this tool) | Merged bill across hosts, budget alerts, quantified waste |
+| Huge command output | [RTK](https://www.rtk-ai.app/) output compressor | Built-in: install from the dashboard |
+| Re-reading code | AST-based structural readers | Whole file → outline first, then read just the symbol |
+| Verbose model replies | Terse-output skills | Output tokens only, no overlap with input |
+
+**On the name collision:** there is a **different `token-pilot`** on npm ([Digital-Threads/token-pilot](https://github.com/Digital-Threads/token-pilot)) that does the "re-reading code" row above — AST-based code navigation. It does **not** track spend, and this tool does **not** read code structure. They solve different halves of the same cost problem and compose fine.
+
+The correct package is the scoped **`@anthonyhan/token-pilot`**.
+
 ## 💰 Support
 
 Free & MIT. If it saved you money on AI bills, buy me a coffee (Alipay / WeChat codes in the [Chinese README](README.md#-支持这个项目)) — or just say hi on [X @AnthonyHan_](https://x.com/AnthonyHan_).
