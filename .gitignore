@@ -6,3 +6,9 @@ menubar/src-tauri/target/
 # docs/plan 等内部文档不进仓库；docs/assets（README 引用的图）必须进
 docs/*
 !docs/assets/
+
+# GitHub Pages 站点（放在 docs/ 是 Pages 分支源唯一支持的目录之一）
+!docs/index.html
+!docs/dashboard.png
+!docs/icon.png
+!docs/menubar-panel.png

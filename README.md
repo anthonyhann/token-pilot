@@ -13,7 +13,7 @@
 [![Tests](https://img.shields.io/badge/tests-42%20passing-brightgreen)](tests/)
 [![Accuracy](https://img.shields.io/badge/对账脚本-逐项一致-blue)](#-数据准确性)
 
-[快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [贡献](CONTRIBUTING.md) · [TODO](#-todo-list) · [English](README-en.md) · [llms.txt](llms.txt)
+[快速开始](#-快速开始) · [状态栏应用](#-状态栏应用) · [数据准确性](#-数据准确性) · [什么时候别用它](#-什么时候别用它) · [讨论](https://github.com/anthonyhann/token-pilot/discussions) · [贡献](CONTRIBUTING.md) · [English](README-en.md)
 
 </div>
 
@@ -120,6 +120,11 @@ npm test                              # 49 个单元测试（定价/采集口径
 - **你想管的工具不写本地用量日志**（Antigravity / Copilot / Cursor 等 12 款）——只能检测到装没装，读不到 token
 - **桌面订阅 App**（Kimi.app / ChatGPT.app）——不按 token 计费，只能登记固定月费
 - **想拦在请求前面节流**——它是事后分析，不拦截请求（拦截需要代理层，在 Roadmap）
+
+## 💬 参与讨论
+
+- **[Discussions](https://github.com/anthonyhann/token-pilot/discussions)** ——「这个模型算得对不对」「能不能支持某某工具」这类问题放这里，比开 issue 合适
+- **[Issues](https://github.com/anthonyhann/token-pilot/issues/new/choose)** ——数据算错、功能异常
 
 ## 💰 支持这个项目
 
