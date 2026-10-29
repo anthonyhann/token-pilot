@@ -12,6 +12,7 @@ import { detectRetryLoops } from './retry-detector.js';
 import { savingsAdvice } from './savings.js';
 import { computeCompression } from './compression.js';
 import { buildAdapterTiers, HOST_TIERS } from './registry.js';
+import { APP_VERSION } from './version.js';
 
 const AGENT_NAMES: Record<string, string> = {
   'claude-code': 'Claude Code',
@@ -502,6 +503,7 @@ export async function buildDashboardData(
   }
 
   return {
+    appVersion: APP_VERSION,
     generatedAt: nowMs,
     usdToCny: fx,
     dateLabel: `${now.getMonth() + 1}月${now.getDate()}日 周${WD[now.getDay()]}`,

@@ -428,6 +428,17 @@ fn hide_panel(window: tauri::WebviewWindow) {
     let _ = window.hide();
 }
 
+/// 正在运行的二进制版本（编译期从 Cargo.toml 取，与 tauri.conf.json 同源）。
+///
+/// 前端拿它做版本显示：这是「你现在装的是哪一版」的权威答案——
+/// 数据文件里的 appVersion 只说明「数据是哪个版本生成的」，两者会短暂不一致
+/// （自动更新装完新版、后台 sync 还没跑）时，前端会把两个数字都列出来。
+/// 三处版本号的一致性由 CI 的「校验版本号一致」步骤把关，这里不再重复比对。
+#[tauri::command]
+fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
 #[tauri::command]
 fn open_dashboard(app: tauri::AppHandle) {
     open_dashboard_impl(&app);
@@ -933,7 +944,13 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![get_data, hide_panel, open_dashboard, save_config])
+        .invoke_handler(tauri::generate_handler![
+            get_data,
+            hide_panel,
+            open_dashboard,
+            save_config,
+            app_version
+        ])
         .setup(|app| {
             // 让 ~/.token-pilot/dashboard.html 与 app 内置版本保持一致：
             // 否则 app 升级后，走浏览器回退路径的人打开的还是旧看板。
@@ -960,10 +977,21 @@ fn main() {
             let mode_i = MenuItem::with_id(app, "toggle-mode", "切换为额度显示", true, None::<&str>)?;
             let upd_status_i =
                 MenuItem::with_id(app, "update-status", "尚未检查更新", false, None::<&str>)?;
+            // 版本号：只读灰字，放在更新项下面——用户想确认「我是哪一版 / 更新有没有装上」
+            // 时，右键就能看到，不用开面板、更不用去翻安装包。
+            let ver_i = MenuItem::with_id(
+                app,
+                "app-version",
+                format!("token-pilot v{}", env!("CARGO_PKG_VERSION")),
+                false,
+                None::<&str>,
+            )?;
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
-                &[&title_i, &panel_i, &dash_i, &mode_i, &upd_i, &upd_status_i, &quit_i],
+                &[
+                    &title_i, &panel_i, &dash_i, &mode_i, &upd_i, &upd_status_i, &ver_i, &quit_i,
+                ],
             )?;
 
             // 托盘图标分平台：macOS 用单色模板（深浅菜单栏自适应）；

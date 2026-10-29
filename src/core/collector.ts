@@ -54,6 +54,12 @@ const WINDOW_MS = 40 * 86400_000;
 const LOCK_TTL_MS = 120_000;
 
 // ---------- 单飞锁 ----------
+/// 抢锁。返回 true = 抢到了（调用方负责 release）。
+///
+/// 写锁失败（目录只读、沙箱 EPERM、磁盘满）不能让整次 sync 崩掉：
+/// 锁只是防多进程叠加的优化，拿不到就退化成本次不加锁跑——总比看板
+/// 直接返回 {} 什么都看不到强。这里吞掉写错误，只在拿不到时返回 true，
+/// 由调用方的 finally 里的 release 自行忽略"文件不存在"。
 export async function acquireSyncLock(): Promise<boolean> {
   try {
     const raw = await fs.readFile(LOCK_PATH, 'utf8');
@@ -68,10 +74,14 @@ export async function acquireSyncLock(): Promise<boolean> {
       }
     }
   } catch {
-    // 无锁文件
+    // 无锁文件（或读不到）
   }
-  await fs.mkdir(CONFIG_DIR, { recursive: true });
-  await fs.writeFile(LOCK_PATH, JSON.stringify({ pid: process.pid, ts: Date.now() }), 'utf8');
+  try {
+    await fs.mkdir(CONFIG_DIR, { recursive: true });
+    await fs.writeFile(LOCK_PATH, JSON.stringify({ pid: process.pid, ts: Date.now() }), 'utf8');
+  } catch {
+    // 写不了锁文件：不加锁也要继续，不能因为锁而拿不到数据
+  }
   return true;
 }
 

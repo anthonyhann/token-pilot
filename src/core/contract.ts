@@ -139,6 +139,12 @@ export interface TrendSplit {
 export interface MixSet { model: MixRow[]; tool: MixRow[]; proj: MixRow[] }
 
 export interface DashboardData {
+  /**
+   * 生成这份数据的 token-pilot 版本（取自 package.json）。
+   * 让用户在看板/面板上直接看到自己装的是哪一版，方便判断自动更新是否生效。
+   * 可选：老数据文件没有这个字段，前端回退到 app 自带版本或干脆不显示。
+   */
+  appVersion?: string;
   generatedAt: number;    // unix ms
   usdToCny: number;
   dateLabel: string;      // '10月20日 周二'

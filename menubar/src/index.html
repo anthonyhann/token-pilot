@@ -70,6 +70,10 @@ button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 .p-logo{width:24px;height:24px;border-radius:8px;background:linear-gradient(120deg,var(--accent),var(--accent-2) 60%,var(--accent-3));display:grid;place-items:center;flex:none}
 .p-logo svg{width:13px;height:13px;fill:oklch(1 0 0)}
 .p-head h1{font-size:13.5px;font-weight:800;margin:0}
+/* 版本号：紧跟品牌名的小号等宽数字。不抢标题的视觉重量，但要一眼看得到、
+   选中可复制（报 issue / 判断自动更新是否生效时都要贴）。 */
+.p-head .ver-badge{font-size:10.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.02em;user-select:text;padding:1px 0}
+.p-head .ver-badge:empty{display:none}
 .p-head .st{font-size:10.5px;font-weight:700;color:var(--pos-text);background:color-mix(in oklab,var(--pos) 12%,var(--tint));border-radius:999px;padding:1px 8px}
 .p-head .sp{flex:1}
 .p-date{color:var(--muted);font-size:11.5px}
@@ -226,6 +230,7 @@ body.closed .reopen:hover{color:var(--fg)}
     <header class="p-head" data-od-id="panel-head">
       <span class="p-logo"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg></span>
       <h1>Token Pilot</h1>
+      <span class="ver-badge" title="当前版本"></span>
       <span class="st">本地 · 零采集</span>
       <span class="sp"></span>
       <span class="p-date num">10月20日 周二</span>
@@ -342,6 +347,29 @@ body.closed .reopen:hover{color:var(--fg)}
   /* ===== 环境探测：Tauri invoke ===== */
   var T=window.__TAURI__,tauriInvoke=null;
   try{if(T){tauriInvoke=(T.core&&T.core.invoke)||T.invoke||null}}catch(e){tauriInvoke=null}
+
+  /* ===== 版本号 =====
+     来源优先级（高 → 低），因为两边的更新节奏不同：
+       1. app_version（Tauri 命令）：正在跑的二进制版本，权威
+       2. __TP_DATA__.appVersion（数据文件）：数据是哪个版本的 CLI 生成的
+       3. 都没有就不显示（老数据 + 浏览器打开）
+     两个都有且不一致时如实显示「app vX · 数据 vY」——这正是自动更新后
+     「二进制升了、后台 sync 还没跑」或反过来时的真实现状，藏起来反而误导。 */
+  var APP_VER=null;
+  function setVer(){
+    var el=document.querySelector(".p-head .ver-badge");
+    if(!el)return;
+    var app=APP_VER;
+    var data=D&&D.appVersion||null;
+    var txt="";
+    if(app&&data&&app!==data)txt="v"+app+" · 数据 v"+data;
+    else if(app||data)txt="v"+(app||data);
+    el.textContent=txt;
+    el.title=(app&&data&&app!==data)?"当前程序 v"+app+"，数据由 v"+data+" 生成":"当前版本";
+  }
+  if(tauriInvoke){
+    try{tauriInvoke("app_version").then(function(v){if(v){APP_VER=String(v);setVer()}},function(){})}catch(e){}
+  }
 
   /* ===== 主题切换（localStorage 'tp-theme'） ===== */
   var root=document.documentElement,btn=$("#themeBtn");
@@ -633,6 +661,7 @@ body.closed .reopen:hover{color:var(--fg)}
     renderTokTrend();
     renderLive();
     renderSavings();
+    setVer();
   }
   function applyData(d){
     if(!d||typeof d!=="object")return;
