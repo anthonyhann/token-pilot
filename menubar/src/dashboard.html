@@ -235,6 +235,33 @@ svg{display:block}
 .save-amt.warn{color:var(--warn);background:color-mix(in oklab, var(--warn) 10%, var(--tint))}
 .save-amt.info{color:var(--info);background:color-mix(in oklab, var(--info) 11%, var(--tint))}
 
+/* 订阅额度与余额：三段式（订阅窗口 / Token Plan / 现金余额） */
+.q-group{margin-bottom:16px}
+.q-group:last-child{margin-bottom:0}
+.q-group-title{font-size:11.5px;font-weight:800;color:var(--muted);letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.q-prov{border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:8px;background:var(--surface)}
+.q-prov-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px}
+.q-prov-name{font-size:13px;font-weight:800}
+.q-prov-src{font-size:10.5px;color:var(--muted);font-weight:600}
+.q-win{display:grid;grid-template-columns:96px 1fr auto;align-items:center;gap:10px;margin-top:6px;font-size:12px}
+.q-win-label{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q-bar{height:7px;border-radius:999px;background:var(--border);overflow:hidden}
+.q-bar i{display:block;height:100%;border-radius:999px;transition:width .3s var(--ease)}
+.q-win-right{display:flex;align-items:center;gap:8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.q-pct{font-weight:800;min-width:42px;text-align:right}
+.q-reset{color:var(--muted);font-size:11px}
+.q-pace{font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px}
+.q-pace.hot{color:var(--warn);background:color-mix(in oklab,var(--warn) 12%,transparent)}
+.q-pace.cool{color:var(--pos);background:color-mix(in oklab,var(--pos) 12%,transparent)}
+.q-abs{color:var(--muted);font-size:11px}
+.q-balance{display:flex;align-items:baseline;gap:8px}
+.q-balance b{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.q-balance b.low{color:var(--warn)}
+.q-fail{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.q-note{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.6}
+.q-tp{display:grid;grid-template-columns:1fr 120px;align-items:center;gap:10px;font-size:12px}
+@media (max-width:640px){.q-win{grid-template-columns:80px 1fr}.q-win-right{grid-column:1/-1;justify-content:flex-end}}
+
 /* 压缩潜力：总额条 + 模式拆分 + 最浪费会话 */
 .cmp-bar{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .cmp-big{font-size:30px;font-weight:800;letter-spacing:-.02em;color:var(--pos)}
@@ -584,6 +611,14 @@ footer .notes{max-width:560px}
       <span class="sec-note">本月 · 规则法估算，压缩后可省区间</span>
     </div>
     <div id="cmpBody"><div class="cmp-empty">本月暂无明显可压缩的上下文浪费。</div></div>
+  </section>
+
+  <section class="sec acc-violet full-only" data-od-id="quota" style="margin-top:16px">
+    <div class="sec-head">
+      <h2 class="sec-title"><span class="icon-chip ic-violet"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9"/><path d="M21 12a9 9 0 0 1-9 9"/><path d="M12 7v5l3 3"/></svg></span>订阅额度与余额</h2>
+      <span class="sec-note" id="quotaNote">还能用多少 · 与账单互补</span>
+    </div>
+    <div id="quotaBody"><div class="cmp-empty">暂未检测到可监控的平台。</div></div>
   </section>
 
   <section class="sec acc-blue full-only" data-od-id="adapters" style="margin-top:16px">
@@ -1213,6 +1248,114 @@ function renderCompression(){
   box.innerHTML=h;
 }
 
+/* ---------- quota：订阅额度与余额 ---------- */
+function qBarColor(pct){
+  if(pct>=90)return 'var(--warn)';
+  if(pct>=70)return 'color-mix(in oklab,var(--warn) 55%,var(--pos))';
+  return 'var(--pos)';
+}
+function qResetText(iso){
+  if(!iso)return '';
+  var t=Date.parse(iso); if(isNaN(t))return '';
+  var ms=t-Date.now();
+  if(ms<=0)return '即将重置';
+  var mins=Math.floor(ms/60000);
+  if(mins<60)return mins+' 分钟后';
+  var h=Math.floor(mins/60);
+  if(h<24)return h+' 小时后';
+  return Math.floor(h/24)+' 天后';
+}
+function qPace(w){
+  if(!w.resetsAt||!w.windowMinutes)return '';
+  var reset=Date.parse(w.resetsAt); if(isNaN(reset))return '';
+  var total=w.windowMinutes*60000;
+  var left=Math.max(0,Math.min(reset-Date.now(),total));
+  var elapsed=(total-left)/total;
+  if(elapsed<0.02)return '';
+  var d=w.percent-elapsed*100;
+  if(d>15)return '<span class="q-pace hot">快 '+Math.round(d)+'%</span>';
+  if(d<-15)return '<span class="q-pace cool">慢 '+Math.round(-d)+'%</span>';
+  return '';
+}
+var QSRC={api:'官方接口',cli:'官方 CLI',computed:'本地计算',manual:'手动登记'};
+function renderQuota(){
+  var box=document.getElementById('quotaBody');
+  if(!box)return;
+  var q=D.quota;
+  if(!q||!q.providers||!q.providers.length){
+    box.innerHTML='<div class="cmp-empty">暂未检测到可监控的平台。装了 OpenCode / 火山 arkcli / 配置了 API Key 后会自动出现。</div>';
+    return;
+  }
+  // 三段：订阅窗口 / Token Plan / 现金余额
+  var subs=[],plans=[],bals=[];
+  q.providers.forEach(function(p){
+    if(!p.ok){ subs.push(p); return; }  // 失败的也放订阅区提示
+    if(p.windows&&p.windows.length)subs.push(p);
+    if(p.tokenPlan)plans.push(p);
+    if(p.balance)bals.push(p);
+  });
+
+  function winRow(w){
+    var pct=Math.max(0,Math.min(100,+w.percent||0));
+    var abs=(w.used!=null&&w.total!=null)?'<span class="q-abs">'+w.used+'/'+w.total+'</span>':'';
+    return '<div class="q-win"><span class="q-win-label" title="'+esc(w.label)+'">'+esc(w.label)+'</span>'+
+      '<div class="q-bar"><i style="width:'+pct+'%;background:'+qBarColor(pct)+'"></i></div>'+
+      '<span class="q-win-right"><span class="q-pct">'+trim1(pct)+'%</span>'+
+      (abs?' '+abs:'')+
+      (w.resetsAt?' <span class="q-reset">'+esc(qResetText(w.resetsAt))+'</span>':'')+
+      ' '+qPace(w)+'</span></div>';
+  }
+  function provCard(p,body){
+    return '<div class="q-prov"><div class="q-prov-head"><span class="q-prov-name">'+esc(p.displayName)+'</span>'+
+      '<span class="q-prov-src">'+esc(QSRC[p.source]||'')+'</span></div>'+body+
+      (p.note?'<div class="q-note">'+esc(p.note)+'</div>':'')+'</div>';
+  }
+
+  var h='';
+  if(subs.length){
+    h+='<div class="q-group"><div class="q-group-title">订阅额度</div>';
+    subs.forEach(function(p){
+      if(!p.ok){
+        h+=provCard(p,'<div class="q-fail">'+esc(p.error||'获取失败')+'</div>');
+      }else{
+        h+=provCard(p,(p.windows||[]).map(winRow).join(''));
+      }
+    });
+    h+='</div>';
+  }
+  if(plans.length){
+    h+='<div class="q-group"><div class="q-group-title">Token Plan</div>';
+    plans.forEach(function(p){
+      var t=p.tokenPlan,pct=t.percent!=null?Math.max(0,Math.min(100,t.percent)):null;
+      var body='<div class="q-tp"><span>'+esc(t.planName||'Token Plan')+'</span>';
+      if(pct!=null){
+        body+='<div class="q-bar"><i style="width:'+pct+'%;background:'+qBarColor(pct)+'"></i></div>';
+      }else{body+='<span class="q-abs">—</span>';}
+      body+='</div>';
+      if(t.remainingTokens!=null)body+='<div class="q-abs" style="margin-top:6px">剩余 '+fmtTok(t.remainingTokens)+' tokens</div>';
+      h+=provCard(p,body);
+    });
+    h+='</div>';
+  }
+  if(bals.length){
+    h+='<div class="q-group"><div class="q-group-title">API 余额</div>';
+    bals.forEach(function(p){
+      var b=p.balance,sym=b.currency==='CNY'?'¥':'$';
+      var low=b.amount<20;
+      h+=provCard(p,'<div class="q-balance"><b class="num'+(low?' low':'')+'">'+sym+b.amount.toFixed(2)+'</b>'+
+        (low?'<span class="q-reset">余额偏低</span>':'')+'</div>');
+    });
+    h+='</div>';
+  }
+  box.innerHTML=h;
+
+  var note=document.getElementById('quotaNote');
+  if(note){
+    var n=q.providers.filter(function(p){return p.ok;}).length;
+    note.textContent=n+' 个平台可读'+(q.cached?' · 缓存':'');
+  }
+}
+
 /* ---------- token trend ---------- */
 var TW=1100,THh=220,TB=200,TT=12;
 function smoothL(xs,ys){
@@ -1367,6 +1510,7 @@ function renderAll(d){
   renderRanks();
   renderSavings();
   renderCompression();
+  renderQuota();
   renderAdapters();
   renderFooter();
 }
