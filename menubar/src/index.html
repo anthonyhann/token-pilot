@@ -210,6 +210,30 @@ body.closed .reopen:hover{color:var(--fg)}
 .save-amt.warn{color:var(--warn);background:color-mix(in oklab,var(--warn) 12%,var(--tint))}
 .save-amt.info{color:var(--info);background:color-mix(in oklab,var(--info) 13%,var(--tint))}
 
+/* 订阅额度与余额：面板宽度有限，每个平台一行，窗口用细进度条 + 百分比。
+   与看板保持同一份数据契约（DashboardData.quota），只换更紧凑的表达。 */
+.quota{margin:0 14px 4px}
+.q-prov{padding:7px 0;border-bottom:1px solid var(--gridln)}
+.q-prov:last-child{border-bottom:0}
+.q-head{display:flex;align-items:baseline;gap:6px}
+.q-name{font-weight:700;font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-src{color:var(--muted);font-size:9.5px;font-weight:600;flex:none}
+.q-win{display:flex;align-items:center;gap:7px;margin-top:4px}
+.q-lab{color:var(--muted);font-size:10.5px;flex:none;min-width:52px;max-width:96px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-bar{flex:1;height:5px;border-radius:3px;background:var(--track);overflow:hidden;min-width:36px}
+.q-bar i{display:block;height:100%;border-radius:3px;background:var(--pos)}
+.q-bar i.mid{background:var(--accent)}
+.q-bar i.hot{background:var(--warn)}
+.q-pct{font-size:10.5px;font-weight:700;min-width:34px;text-align:right;flex:none}
+.q-pct.hot{color:var(--warn)}
+.q-abs{color:var(--muted);font-size:9.5px;flex:none}
+.q-bal{display:flex;align-items:baseline;gap:6px;margin-top:4px}
+.q-bal .amt{font-size:14px;font-weight:800}
+.q-bal .amt.low{color:var(--warn)}
+.q-sub{color:var(--muted);font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-err{color:var(--muted);font-size:10.5px;margin-top:3px}
+.q-empty{color:var(--muted);font-size:11px;padding:6px 0}
+
 .p-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:10px 14px 12px;border-top:1px solid var(--border)}
 .open-full{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--info);border:1px solid color-mix(in oklab,var(--info) 30%,var(--tint));border-radius:9px;padding:6px 12px;transition:background .15s var(--ease),border-color .25s var(--ease),color .25s var(--ease)}
 .open-full:hover{background:color-mix(in oklab,var(--info) 10%,var(--tint))}
@@ -309,6 +333,12 @@ body.closed .reopen:hover{color:var(--fg)}
       <div class="live-more num">另有 1 个空闲会话 · 8 分钟前停更</div>
     </div>
 
+    <div class="sec-t" data-od-id="quota-title" id="quotaTitle" style="display:none">
+      <h2><span class="ic" style="--cc:var(--accent-3)"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span>订阅额度与余额</h2>
+      <span class="more">还剩多少</span>
+    </div>
+    <div class="quota num" data-od-id="quota" id="quotaBox" style="display:none"></div>
+
     <div class="sec-t" data-od-id="savings-title">
       <h2><span class="ic" style="--cc:var(--info)"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 4 10c-.8.7-1 1.5-1 2.5h-6c0-1-.2-1.8-1-2.5a6 6 0 0 1 4-10z"/></svg></span>省钱建议</h2>
       <span class="more">事后分析 · 不拦截</span>
@@ -330,6 +360,8 @@ body.closed .reopen:hover{color:var(--fg)}
         <span class="save-amt">¥6.8/周</span>
       </div>
     </div>
+
+
 
     </div>
     <footer class="p-foot" data-od-id="panel-foot">
@@ -648,6 +680,105 @@ body.closed .reopen:hover{color:var(--fg)}
     }).join("");
   }
 
+  /* ===== 订阅额度与余额 =====
+     面板宽度只有 480，塞不下看板那种「每个窗口一行」的完整表。
+     这里每个平台压成一行：显示最紧张的那个窗口，鼠标悬停看全部。
+     数据契约与看板完全一致（D.quota.providers），分类口径也一致：
+       windows   → 订阅额度（会重置）
+       tokenPlan → 预付 token 包
+       balance   → 现金余额
+     三者经济含义不同，不能合并算。 */
+  var QSRC={api:"官方接口",cli:"官方 CLI",computed:"本地计算",manual:"手动登记"};
+  function qResets(iso){
+    if(!iso)return "";
+    var t=Date.parse(iso);if(isNaN(t))return "";
+    var ms=t-Date.now();
+    if(ms<=0)return "即将重置";
+    var m=Math.floor(ms/60000);
+    if(m<60)return m+" 分钟后";
+    var h=Math.floor(m/60);
+    if(h<24)return h+" 小时后";
+    return Math.floor(h/24)+" 天后";
+  }
+  function qTightest(windows){
+    var best=null;
+    (windows||[]).forEach(function(w){
+      if(!best||(+w.percent||0)>(+best.percent||0))best=w;
+    });
+    return best;
+  }
+  function qAll(windows){
+    return (windows||[]).map(function(w){
+      return w.label+" "+(Math.round((+w.percent||0)*10)/10)+"%"+
+        (w.used!=null&&w.total!=null?" ("+w.used+"/"+w.total+")":"")+
+        (w.resetsAt?" · "+qResets(w.resetsAt)+"刷新":"");
+    }).join("\n");
+  }
+  function renderQuota(){
+    var title=document.getElementById("quotaTitle");
+    var box=document.getElementById("quotaBox");
+    if(!box||!title)return;
+    var q=D&&D.quota;
+    var provs=(q&&q.providers)||[];
+    if(!provs.length){
+      // 与看板同一规则：没有任何可监控平台时整块隐藏。
+      // 空标题 +「暂未检测到」只会占位置，用户也做不了什么。
+      title.style.display="none";
+      box.style.display="none";
+      box.innerHTML="";
+      return;
+    }
+    var rows=provs.map(function(p){
+      var src='<span class="q-src">'+esc(QSRC[p.source]||p.source||"")+'</span>';
+      var head='<div class="q-head"><span class="q-name">'+esc(p.displayName)+'</span>'+src+'</div>';
+
+      if(!p.ok&&!(p.balance)){
+        return '<div class="q-prov">'+head+
+          '<div class="q-err">'+esc(p.error||"获取失败")+'</div></div>';
+      }
+      // 现金余额：直接给数额，低于 20 标红（和看板一致的口径）
+      if(p.balance){
+        var amt=+p.balance.amount;
+        var low=amt<20;
+        return '<div class="q-prov">'+head+'<div class="q-bal">'+
+          '<span class="amt'+(low?" low":"")+'">'+
+            (p.balance.currency==="CNY"?"¥":"$")+amt.toFixed(2)+'</span>'+
+          (low?'<span class="q-err" style="margin:0">余额偏低</span>':"")+
+          '</div></div>';
+      }
+      var wins=p.windows||[];
+      if(wins.length){
+        var t=qTightest(wins);
+        var pct=Math.max(0,Math.min(100,+t.percent||0));
+        var cls=pct>=90?"hot":(pct>=70?"mid":"");
+        var abs=(t.used!=null&&t.total!=null)?'<span class="q-abs">'+t.used+"/"+t.total+'</span>':"";
+        var more=wins.length>1?'<span class="q-abs">共 '+wins.length+' 个窗口</span>':"";
+        return '<div class="q-prov" title="'+esc(qAll(wins))+'">'+head+
+          '<div class="q-win">'+
+            '<span class="q-lab" title="'+esc(t.label)+'">最紧张</span>'+
+            '<div class="q-bar"><i class="'+cls+'" style="width:'+pct+'%"></i></div>'+
+            '<span class="q-pct '+cls+'">'+(Math.round(pct*10)/10)+'%</span>'+
+          '</div>'+
+          '<div class="q-sub">'+esc(t.label)+
+            (abs?" · "+abs:"")+
+            (t.resetsAt?" · "+esc(qResets(t.resetsAt))+"后刷新":"")+
+            (more?" · "+more:"")+
+          '</div>'+
+        '</div>';
+      }
+      var tp=p.tokenPlan;
+      if(tp){
+        return '<div class="q-prov">'+head+'<div class="q-bal">'+
+          '<span class="amt">'+(tp.remainingTokens!=null?fmtTokS(tp.remainingTokens):"—")+'</span>'+
+          '<span class="q-abs">剩余 tokens</span></div></div>';
+      }
+      return '<div class="q-prov">'+head+'<div class="q-err">暂无额度数据</div></div>';
+    }).join("");
+    title.style.display="";
+    box.style.display="";
+    box.innerHTML=rows;
+  }
+
   /* ===== 数据装载：__TP_DATA__ → __TAURI__ → /api/data ===== */
   function renderAll(){
     if(!D)return;
@@ -661,6 +792,7 @@ body.closed .reopen:hover{color:var(--fg)}
     renderTokTrend();
     renderLive();
     renderSavings();
+    renderQuota();
     setVer();
   }
   function applyData(d){

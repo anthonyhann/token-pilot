@@ -613,12 +613,12 @@ footer .notes{max-width:560px}
     <div id="cmpBody"><div class="cmp-empty">本月暂无明显可压缩的上下文浪费。</div></div>
   </section>
 
-  <section class="sec acc-violet full-only" data-od-id="quota" style="margin-top:16px">
+  <section class="sec acc-violet full-only" data-od-id="quota" id="quotaSection" style="margin-top:16px;display:none">
     <div class="sec-head">
       <h2 class="sec-title"><span class="icon-chip ic-violet"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9"/><path d="M21 12a9 9 0 0 1-9 9"/><path d="M12 7v5l3 3"/></svg></span>订阅额度与余额</h2>
       <span class="sec-note" id="quotaNote">还能用多少 · 与账单互补</span>
     </div>
-    <div id="quotaBody"><div class="cmp-empty">暂未检测到可监控的平台。</div></div>
+    <div id="quotaBody"></div>
   </section>
 
   <section class="sec acc-blue full-only" data-od-id="adapters" style="margin-top:16px">
@@ -1280,12 +1280,17 @@ function qPace(w){
 var QSRC={api:'官方接口',cli:'官方 CLI',computed:'本地计算',manual:'手动登记'};
 function renderQuota(){
   var box=document.getElementById('quotaBody');
-  if(!box)return;
+  var sec=document.getElementById('quotaSection');
+  if(!box||!sec)return;
   var q=D.quota;
+  // 没有任何可监控平台就整块隐藏——空壳标题比不显示更碍事，
+  // 也没有信息量。面板用同一规则（见 web/panel.html 的 renderQuota）。
   if(!q||!q.providers||!q.providers.length){
-    box.innerHTML='<div class="cmp-empty">暂未检测到可监控的平台。装了 OpenCode / 火山 arkcli / 配置了 API Key 后会自动出现。</div>';
+    sec.style.display='none';
+    box.innerHTML='';
     return;
   }
+  sec.style.display='';
   // 三段：订阅窗口 / Token Plan / 现金余额
   var subs=[],plans=[],bals=[];
   q.providers.forEach(function(p){
