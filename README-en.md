@@ -21,7 +21,7 @@ For anyone running Claude Code / Codex / Kimi Code with Chinese models (DeepSeek
 
 ![Menubar panel](docs/assets/menubar-panel.png)
 
-> Lives in your menubar as `⚡ ¥today · budget%`. Left-click for the panel, "Open dashboard" for the full picture. My real October: **3.81B tokens · ¥7,328 · 27,450 calls** ([how we know](#-data-accuracy)).
+> Lives in your menubar as `⚡ ¥today · budget%`. Left-click for the panel, "Open dashboard" for the full picture. My real October: **4.78B tokens · ¥8,265 · 32,643 calls** ([how we know](#-data-accuracy)).
 
 > ⚠️ npm 上另有一个**别人家的** `token-pilot`（MCP 代码导航工具，会往 Claude Code 写 hooks）。我们的包是 **`@anthonyhan/token-pilot`**，下面命令都带 scope，照抄即可。
 
@@ -78,7 +78,7 @@ A billing tool that's wrong is worse than none. Accuracy here is **verifiable**:
 ```bash
 python3 scripts/reconcile.py month    # independent third-party recount of raw logs vs CLI
 python3 scripts/verify-dashboard.py   # 36 dashboard algorithm invariants
-npm test                              # 49 unit tests (pricing / collection / aggregation / breaker / RTK)
+npm test                              # 69 unit tests (pricing / collection / aggregation / breaker / RTK / quota / concurrency)
 ```
 
 Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
@@ -91,8 +91,8 @@ Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
 
 ## 📊 Why trust me
 
-- It runs my own AI bill: **¥7,328 / 3.81B tokens** this month (2026-10-27, screenshots above are my live data)
-- 36 dashboard invariants + 49 unit tests + an independent reconciliation script — all runnable out of the box
+- It runs my own AI bill: **¥8,265 / 4.78B tokens** this month (2026-10-29, screenshots above are my live data)
+- 36 dashboard invariants + 69 unit tests + an independent reconciliation script — all runnable out of the box
 - Honest about rate accounting: logs book tokens at call-completion time; in-flight generations aren't counted until they finish (noted in the dashboard)
 
 ## ⚠️ When NOT to use it
@@ -100,6 +100,30 @@ Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
 - **Your tool doesn't write local usage logs** (Antigravity / Copilot / Cursor and 9 more) — we detect presence, but there's no token data to read
 - **Desktop subscription apps** (Kimi.app / ChatGPT.app) — not per-token billed; tracked as fixed monthly fees only
 - **You want to throttle requests before they happen** — it's after-the-fact analysis, not a proxy (a routing layer is on the roadmap)
+
+## 🔋 Subscription quotas & balances
+
+Billing answers "how much did I spend"; quotas answer "how much is left". The latter comes straight from each provider's own endpoint, not from local estimation.
+
+| Provider | What you get | Source |
+|---|---|---|
+| **OpenCode Go** | rolling / weekly / monthly usage percent | Official API, reuses OpenCode's own login |
+| **Volcengine Ark** | Agent Plan absolute + percent; Coding Plan percent | Official CLI `arkcli usage plan` |
+| **Zhipu GLM** | Quota windows + plan tier | Official API |
+| **DeepSeek / Moonshot** | Cash balance | Official balance API |
+| **MiniMax** | Remaining token plan | Official API |
+
+**Where credentials come from** (three levels, whatever you have):
+
+1. Keys you entered in the dashboard settings — always works
+2. The platform's own stored login (e.g. `~/.local/share/opencode/auth.json`) — present if you use that tool
+3. [CC Switch](https://github.com/farion1231/cc-switch) config — auto-read **only if installed**
+
+> Level 3 is convenience, not a dependency: without CC Switch you just enter a key once and get the full quota feature set.
+
+**Honest note**: Coding Plan tiers only return percentages, not absolute numbers. So you will never see a fabricated "used 1500/20000" — it shows exactly what the provider reports.
+
+**Pace**: "60% used" alone is meaningless. Knowing "40% of the window elapsed but 60% consumed" tells you whether to slow down. Where a window length and reset time exist, each row is annotated "faster/slower than linear pace by N%".
 
 ## 🧩 How it differs from other tools
 

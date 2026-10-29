@@ -204,6 +204,33 @@ export async function runDoctor(): Promise<DoctorReport> {
     /* RTK 检测失败不影响整体自检 */
   }
 
+  // ── 8. 额度监控：有哪些平台可读、哪些缺凭证 ──
+  try {
+    const { collectQuota } = await import('./quota/index.js');
+    const snap = await collectQuota(true);
+    const okList = snap.providers.filter((p) => p.ok);
+    const failList = snap.providers.filter((p) => !p.ok);
+
+    if (okList.length > 0) {
+      push({
+        level: 'ok',
+        title: `额度可读 ${okList.length} 个平台`,
+        detail: okList.map((p) => p.displayName).join('、'),
+      });
+    }
+    if (failList.length > 0) {
+      // 这些都是「可选能力」，用 info 不用 warn——不配也不影响账单
+      push({
+        level: 'info',
+        title: `${failList.length} 个平台额度暂不可读`,
+        detail: failList.map((p) => `${p.displayName}：${p.error ?? '未知原因'}`).join('；'),
+        fix: '在看板「数据设置」里填对应 API Key，或确认该平台的 CLI 已登录',
+      });
+    }
+  } catch {
+    /* 额度检测失败不影响自检主流程 */
+  }
+
   // ── 汇总 ──
   const ok = items.filter((i) => i.level === 'ok').length;
   const warn = items.filter((i) => i.level === 'warn').length;
