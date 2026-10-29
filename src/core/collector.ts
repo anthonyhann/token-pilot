@@ -30,6 +30,25 @@ export interface CollectResult {
 }
 
 const CACHE_PATH = path.join(CONFIG_DIR, 'events-cache.json');
+/** 同时打开的文件数上限。SSD 上 32 已经能吃到 IO 带宽，再高只是徒增内存峰值。 */
+const FILE_CONCURRENCY = 32;
+
+/** 限并发的 map，保持结果顺序无关（本项目只关心副作用） */
+async function mapWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+}
 const LOCK_PATH = path.join(CONFIG_DIR, 'sync.lock');
 const WINDOW_MS = 40 * 86400_000;
 const LOCK_TTL_MS = 120_000;
@@ -104,7 +123,10 @@ export async function collectCached(sinceMs = 0): Promise<CollectResult & { pars
     if (ad.listFiles && ad.readFileEvents) {
       let files: string[] = [];
       try { files = await ad.listFiles(); } catch { continue; }
-      await Promise.all(files.map(async (f) => {
+      // 并发上限：曾经直接 Promise.all 全部文件，6481 个 jsonl 同时打开会瞬间
+      // 耗尽 4GB 堆导致 sync 直接 OOM 崩溃（本机实测，2026-10-29）。
+      // 限流后逐个文件的内存占用能被 GC 及时回收，峰值降到百 MB 量级。
+      await mapWithConcurrency(files, FILE_CONCURRENCY, async (f) => {
         let mtime = 0;
         try { mtime = (await fs.stat(f)).mtimeMs; } catch { return; }
         const prev = cache.files[f];
@@ -121,7 +143,7 @@ export async function collectCached(sinceMs = 0): Promise<CollectResult & { pars
         }
         nextFiles[f] = { mtime, adapter: ad.meta.id, events, content: contentEv };
         parsed++;
-      }));
+      });
     } else {
       // 无文件级能力的 adapter：全量读（目前没有这种）
       try {
