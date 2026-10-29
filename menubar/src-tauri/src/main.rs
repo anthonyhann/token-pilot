@@ -73,6 +73,58 @@ fn fmt_cny(v: f64) -> String {
     }
 }
 
+/// 托盘显示模式：账单（默认）或额度
+static TRAY_MODE: std::sync::OnceLock<std::sync::Mutex<bool>> = std::sync::OnceLock::new();
+
+fn tray_mode() -> &'static std::sync::Mutex<bool> {
+    TRAY_MODE.get_or_init(|| std::sync::Mutex::new(false)) // false = 账单模式
+}
+
+/// 额度模式的滚动游标（每 5s tick 前进一格，轮播各个紧张窗口）
+static QUOTA_CURSOR: std::sync::OnceLock<std::sync::Mutex<usize>> = std::sync::OnceLock::new();
+
+fn quota_cursor() -> &'static std::sync::Mutex<usize> {
+    QUOTA_CURSOR.get_or_init(|| std::sync::Mutex::new(0))
+}
+
+/// 收集所有「有百分比的额度窗口」，按紧张程度降序。
+/// 只取能显示的东西：失败平台、无百分比窗口一律跳过，避免托盘里出现乱码。
+fn quota_entries(v: &Value) -> Vec<(String, f64)> {
+    let mut out: Vec<(String, f64)> = Vec::new();
+    let Some(providers) = v.pointer("/quota/providers").and_then(|p| p.as_array()) else {
+        return out;
+    };
+    for p in providers {
+        if p.get("ok").and_then(|b| b.as_bool()) != Some(true) {
+            continue;
+        }
+        let name = p.get("displayName").and_then(|n| n.as_str()).unwrap_or("?");
+        if let Some(wins) = p.get("windows").and_then(|w| w.as_array()) {
+            for w in wins {
+                let pct = w.get("percent").and_then(|x| x.as_f64()).unwrap_or(0.0);
+                let label = w.get("label").and_then(|l| l.as_str()).unwrap_or("");
+                // 托盘空间有限，只取窗口名最后一段
+                let short = label.rsplit('·').next().unwrap_or(label).trim();
+                out.push((format!("{} {}", name, short), pct));
+            }
+        }
+    }
+    out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    out
+}
+
+/// 额度模式下的托盘文案：轮播显示一个窗口的剩余量
+fn quota_title(v: &Value) -> Option<String> {
+    let entries = quota_entries(v);
+    if entries.is_empty() {
+        return None;
+    }
+    let idx = quota_cursor().lock().map(|g| *g).unwrap_or(0) % entries.len();
+    let (label, pct) = &entries[idx];
+    let remain = (100.0 - pct).max(0.0);
+    Some(format!("⚡ {} 剩 {:.0}%", label, remain))
+}
+
 fn tray_title(v: &Value) -> String {
     v.get("trayTitle")
         .and_then(|t| t.as_str())
@@ -94,7 +146,14 @@ fn menu_label(v: &Value) -> String {
 
 fn update_tray(tray: &tauri::tray::TrayIcon, item: &MenuItem<Wry>, v: &Value) {
     // macOS 在图标旁显示文字；Windows 不支持则忽略错误
-    let _ = tray.set_title(Some(tray_title(v)));
+    let mode = tray_mode().lock().map(|g| *g).unwrap_or(false);
+    let text = if mode {
+        // 额度模式：没有可显示窗口时退回账单，避免托盘空白
+        quota_title(v).unwrap_or_else(|| tray_title(v))
+    } else {
+        tray_title(v)
+    };
+    let _ = tray.set_title(Some(text));
     let _ = item.set_text(menu_label(v));
 }
 
@@ -898,12 +957,13 @@ fn main() {
             // install-update 文本随状态变化（「检查更新」→「安装更新 vX.Y.Z 并重启」）
             // update-status 只读，展示上次检查结果/失败原因
             let upd_i = MenuItem::with_id(app, "install-update", "检查更新", true, None::<&str>)?;
+            let mode_i = MenuItem::with_id(app, "toggle-mode", "切换为额度显示", true, None::<&str>)?;
             let upd_status_i =
                 MenuItem::with_id(app, "update-status", "尚未检查更新", false, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
-                &[&title_i, &panel_i, &dash_i, &upd_i, &upd_status_i, &quit_i],
+                &[&title_i, &panel_i, &dash_i, &mode_i, &upd_i, &upd_status_i, &quit_i],
             )?;
 
             // 托盘图标分平台：macOS 用单色模板（深浅菜单栏自适应）；
@@ -929,6 +989,28 @@ fn main() {
                     "quit" => app.exit(0),
                     "open-panel" => show_panel(app),
                     "open-dashboard" => open_dashboard_impl(app),
+                    "toggle-mode" => {
+                        let now_quota = {
+                            if let Ok(mut g) = tray_mode().lock() {
+                                *g = !*g;
+                                *g
+                            } else {
+                                false
+                            }
+                        };
+                        if let Some((tray, item)) = TRAY_REFS.get() {
+                            if let Some(data) = read_data() {
+                                update_tray(tray, item, &data);
+                            }
+                        }
+                        if let Some((_, status)) = UPDATE_MENU_REFS.get() {
+                            let _ = status.set_text(if now_quota {
+                                "额度模式：每 5 秒轮播各窗口"
+                            } else {
+                                "账单模式"
+                            });
+                        }
+                    }
                     "install-update" => {
                         // 已有待安装版本 → 直接装；否则先检查
                         let pending = update_state()
@@ -984,6 +1066,15 @@ fn main() {
                 std::thread::spawn(move || loop {
                     std::thread::sleep(Duration::from_secs(5));
                     let m = data_mtime_ms();
+                    // 额度模式下每 tick 推进游标，实现滚动轮播
+                    if tray_mode().lock().map(|g| *g).unwrap_or(false) {
+                        if let Ok(mut c) = quota_cursor().lock() {
+                            *c = c.wrapping_add(1);
+                        }
+                        if let Some(data) = read_data() {
+                            update_tray(&tray_h, &item_h, &data);
+                        }
+                    }
                     if m != last_mtime {
                         last_mtime = m;
                         refresh_tray_if_changed(&tray_h, &item_h);
