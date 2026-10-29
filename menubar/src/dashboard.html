@@ -1397,11 +1397,28 @@ function renderTok(){
 }
 
 /* ---------- footer ---------- */
+/* 版本号：app_version（正在跑的二进制）优先，退到数据里的 appVersion；
+   两者都有却不一致时如实并列——这能一眼看出「二进制升了、数据还是旧的」。 */
+var APP_VER=null;
+function verText(){
+  var app=APP_VER, data=(D&&D.appVersion)||null;
+  if(app&&data&&app!==data)return "v"+app+" · 数据 v"+data;
+  if(app||data)return "v"+(app||data);
+  return "";
+}
+if(inTauri()&&window.__TAURI__.core){
+  try{
+    window.__TAURI__.core.invoke('app_version').then(function(v){
+      if(v){APP_VER=String(v);if(D)renderFooter()}
+    }).catch(function(){});
+  }catch(e){}
+}
 function renderFooter(){
   var on=0;
   (D.adapters||[]).forEach(function(t){(t.chips||[]).forEach(function(c){if(c.status==="on")on++})});
   var t=D.generatedAt?new Date(D.generatedAt):new Date();
-  document.querySelector("footer .notes").textContent="数据更新于 "+p2(t.getHours())+":"+p2(t.getMinutes())+":"+p2(t.getSeconds())+" · "+on+" 个数据源接入 · 价格为公开目录价估算 · 数据不出本机";
+  var v=verText();
+  document.querySelector("footer .notes").textContent="数据更新于 "+p2(t.getHours())+":"+p2(t.getMinutes())+":"+p2(t.getSeconds())+" · "+on+" 个数据源接入 · 价格为公开目录价估算 · 数据不出本机"+(v?" · "+v:"");
 }
 
 /* ---------- tooltips ---------- */

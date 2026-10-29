@@ -281,6 +281,12 @@ async function cmdCompressReport(): Promise<void> {
 
 async function main() {
   const cmd = process.argv[2] ?? 'today';
+  // 报版本：用户想确认装的是哪一版（也方便 issue 里贴环境）
+  if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
+    const { APP_VERSION } = await import('../core/version.js');
+    console.log(APP_VERSION);
+    return;
+  }
   if (cmd === 'serve') {
     const port = Number(process.argv[3] ?? 17895);
     await serve(port);
@@ -308,7 +314,7 @@ async function main() {
   if (cmd === 'today' || cmd === 'month' || cmd === 'report' || cmd === 'all') {
     return cmdReport(cmd === 'all' ? 'all' : cmd);
   }
-  console.log('用法：token-pilot [today|month|report|sync|dash|serve|prices|quota|doctor]');
+  console.log('用法：token-pilot [today|month|report|sync|dash|serve|prices|quota|doctor|version]');
 }
 
 main().catch((e) => {
