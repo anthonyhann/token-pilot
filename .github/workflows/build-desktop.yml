@@ -201,26 +201,21 @@ jobs:
           missing = need - set(platforms)
           if missing:
               sys.exit(f'::error::三平台不全，缺少 {sorted(missing)}；实际 {sorted(platforms)}')
-          # notes 取仓库内 CHANGELOG 对应段落，避免残留「CI 构建中」
+          # notes 取仓库内 RELEASE_NOTES.md 对应段落，并剥成纯文本
+          # （更新弹窗是纯文本渲染，不剥就会看到字面的 **加粗**、`代码`）
+          # 抽取与剥离逻辑在 scripts/release_notes.py，有单测，可本地跑：
+          #   python3 scripts/release_notes.py 0.4.1
           ver = (version or '').lstrip('v')
           notes = f'token-pilot v{ver}'
-          cl = 'RELEASE_NOTES.md'
-          if os.path.exists(cl):
-              # 只认行首的 '## vX.Y.Z' 标题：文件头里也写了 '## v0.2.7' 之类的示例，
-              # 用裸字符串 split 会抽到那段说明而不是真正的发布段落
-              import re
-              txt = open(cl, encoding='utf-8').read()
-              pat = rf'^## v{re.escape(ver)}\s*$'
-              m = re.search(pat, txt, re.M)
-              if not m:
-                  sys.exit(f'::error::RELEASE_NOTES.md 里找不到「## v{ver}」段落')
-              rest = txt[m.end():]
-              nxt = re.search(r'^## v\S+\s*$', rest, re.M)
-              body = (rest[:nxt.start()] if nxt else rest).strip().strip('-').strip()
-              if body:
-                  notes = body
-              else:
-                  sys.exit(f'::error::RELEASE_NOTES.md 的「## v{ver}」段落是空的')
+          if os.path.exists('RELEASE_NOTES.md'):
+              import subprocess
+              r = subprocess.run(
+                  ['python3', 'scripts/release_notes.py', ver],
+                  capture_output=True, text=True,
+              )
+              if r.returncode != 0:
+                  sys.exit(f'::error::{r.stderr.strip() or "抽取发布说明失败"}')
+              notes = r.stdout.strip()
           # 只检查真正会被客户端展示的正文
           if '构建中' in notes:
               sys.exit('::error::notes 里残留「构建中」字样')
