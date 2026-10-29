@@ -12,6 +12,7 @@ import { CONFIG_DIR } from '../config.js';
 import type { ProviderQuota, QuotaSnapshot } from './types.js';
 import { fetchVolcQuota } from './providers/volc.js';
 import { fetchOpencodeQuota } from './providers/opencode.js';
+import { fetchDeepseekBalance, fetchGlmQuota, fetchMinimaxTokenPlan } from './providers/balance.js';
 
 const CACHE_PATH = path.join(CONFIG_DIR, 'quota-cache.json');
 const TTL_MS = 5 * 60_000;
@@ -23,7 +24,13 @@ export async function collectQuota(force = false): Promise<QuotaSnapshot> {
   }
 
   // 目前只有火山有 provider；后续平台在这里追加
-  const tasks: Promise<ProviderQuota>[] = [fetchVolcQuota(), fetchOpencodeQuota()];
+  const tasks: Promise<ProviderQuota>[] = [
+    fetchVolcQuota(),
+    fetchOpencodeQuota(),
+    fetchDeepseekBalance(),
+    fetchGlmQuota(),
+    fetchMinimaxTokenPlan(),
+  ];
 
   // allSettled：一个平台抛异常不拖垮其它
   const settled = await Promise.allSettled(tasks);

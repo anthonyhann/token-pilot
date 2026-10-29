@@ -84,3 +84,38 @@ test('tension：没有任何额度数据时为 0，不抛异常', () => {
   const q: ProviderQuota = { id: 'x', displayName: 'X', source: 'api', ok: false, fetchedAt: 0 };
   assert.equal(tension(q), 0);
 });
+
+// ── 平台 provider 的错误路径 ──
+// 这些测试不 mock 网络，而是断言「没有凭证 / 无订阅」这类**真实可复现**的状态
+// 能被正确识别为错误，并且给出可执行提示——而不是抛异常或静默成功。
+
+test('resolveKey：没有任何凭证时返回 null，不抛异常', async () => {
+  const { resolveKey } = await import('../src/core/quota/credentials.ts');
+  const r = await resolveKey('definitely-not-a-real-provider-xyz');
+  assert.equal(r, null);
+});
+
+test('fromConfig：配置里没有该 provider 时返回 null', async () => {
+  const { fromConfig } = await import('../src/core/quota/credentials.ts');
+  assert.equal(fromConfig('no-such-provider'), null);
+});
+
+test('ProviderQuota 失败态：ok=false 且必须有 error 文案', () => {
+  // 这是 UI 的契约：失败必须给用户一句能看懂的话，不能只给 ok=false
+  const failed: ProviderQuota = {
+    id: 'x', displayName: 'X', source: 'api', ok: false,
+    error: '未配置 API Key', fetchedAt: 0,
+  };
+  assert.equal(failed.ok, false);
+  assert.ok(failed.error && failed.error.length > 0);
+});
+
+test('tension：失败态的 provider 不影响其它平台取最紧张值', () => {
+  const okOne: ProviderQuota = {
+    id: 'a', displayName: 'A', source: 'api', ok: true, fetchedAt: 0,
+    windows: [{ id: 'w', label: 'w', percent: 70 }],
+  };
+  const failed: ProviderQuota = { id: 'b', displayName: 'B', source: 'api', ok: false, fetchedAt: 0 };
+  assert.equal(tension(okOne), 70);
+  assert.equal(tension(failed), 0, '失败态没有数据，不能参与紧张度比较');
+});

@@ -81,17 +81,19 @@ export function formatQuota(snap: QuotaSnapshot): string {
     }
     if (p.tokenPlan) {
       const t = p.tokenPlan;
+      const name = t.planName ?? 'Token Plan';
       if (t.percent != null) {
-        lines.push(`  ${t.planName ?? 'Token Plan'}`);
-        lines.push(`  ${bar(t.percent)} ${t.percent.toFixed(0)}%`);
+        lines.push(`    ${padDisplay(name, 14)} ${bar(t.percent)} ${t.percent.toFixed(0).padStart(3)}%`);
+      } else {
+        lines.push(`    ${name}`);
       }
       if (t.remainingTokens != null) {
-        lines.push(`    剩余 ${fmtTokens(t.remainingTokens)} tokens`);
+        lines.push(`      剩余 ${fmtTokens(t.remainingTokens)} tokens`);
       }
     }
     if (p.balance) {
       const sym = p.balance.currency === 'CNY' ? '¥' : '$';
-      lines.push(`  余额 ${sym}${p.balance.amount.toFixed(2)}`);
+      lines.push(`    余额        ${sym}${p.balance.amount.toFixed(2)}`);
     }
     if (p.note) lines.push(`    ℹ️  ${p.note}`);
     lines.push('');
