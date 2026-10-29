@@ -1,5 +1,7 @@
 // DashboardData — 前端数据契约
 // 两个前端（完整看板 / 菜单栏面板）都只吃这一份数据。
+import type { QuotaSnapshot } from './quota/types.js';
+
 // 金额一律给 USD 原始值 + 由前端按 usdToCny 折算展示；CNY 派生值在带 Cny 后缀的字段直接给好。
 
 export interface HeroPill {
@@ -181,6 +183,12 @@ export interface DashboardData {
   compression: CompressionData | null;  // 压缩潜力（2A）
 
   adapters: AdapterTier[];
+
+  /**
+   * 订阅额度与余额。
+   * 可选：拉取失败或用户没有任何可监控平台时为 null，账单功能完全不受影响。
+   */
+  quota?: QuotaSnapshot | null;
 
   settings: SettingsData;
 }

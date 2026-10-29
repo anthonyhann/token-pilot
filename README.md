@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/icon.png" width="96" alt="token-pilot —— 所有 AI 工具的本地账单，本月实测 ¥7,328 / 38 亿 tokens">
+<img src="docs/assets/icon.png" width="96" alt="token-pilot —— 所有 AI 工具的本地账单，本月实测 ¥8,265 / 48 亿 tokens">
 
 # token-pilot ⚡
 
@@ -21,7 +21,7 @@
 
 ![状态栏面板](docs/assets/menubar-panel.png)
 
-> 状态栏常驻 `⚡ ¥今日 · 预算%`。左键弹面板，「打开完整看板」看全部。我的真实 10 月：**38.1 亿 tokens · ¥7,328 · 27,450 次调用**（[怎么算的](#-数据准确性)）。
+> 状态栏常驻 `⚡ ¥今日 · 预算%`。左键弹面板，「打开完整看板」看全部。我的真实 10 月：**47.8 亿 tokens · ¥8,265 · 32,643 次调用**（[怎么算的](#-数据准确性)）。
 
 > ⚠️ npm 上另有一个**别人家的** `token-pilot`（MCP 代码导航工具，会往 Claude Code 写 hooks）。我们的包是 **`@anthonyhan/token-pilot`**，下面命令都带 scope，照抄即可。
 
@@ -85,6 +85,7 @@ xattr -dr com.apple.quarantine /Applications/token-pilot.app
 | 想省钱 | 看「省钱建议」卡 | 贵模型干轻活 → 迁移建议+每月省多少；低缓存命中 → 优化空间；本月缓存帮你省了多少 |
 | 上下文太长 | 自动提醒 / 点徽标 | 会话超 100K 上下文标记「该压缩」，可写 Claude Code autoCompact / 装 RTK 输出压缩层（含压缩引擎，装完自动 `rtk init -g` 接入 Claude Code hook） |
 | 想知道能省多少 | 看「压缩潜力」板块 | 本月陈旧输出/重复读取/超长输出各浪费多少钱，按模式拆分 + 列出最浪费的 5 个会话 |
+| 还够不够用 | 看「订阅额度与余额」板块 / `token-pilot quota` | 火山 Agent/Coding Plan、OpenCode Go、GLM 的额度窗口；DeepSeek 等现金余额。**比线性节奏快还是慢**会直接标出来 |
 | 核对价格 | `token-pilot prices` | 每个在用模型的单价来源（目录价/人工覆写/自动补价待核对） |
 | 谁在烧 | 看「宿主/模型/项目榜」 | 哪个工具、哪个模型、哪个项目花最多，一目了然 |
 | 国产模型 | 不用配置 | DeepSeek/GLM/Kimi/Qwen 走宿主日志 model 字段自动归一 |
@@ -98,7 +99,7 @@ xattr -dr com.apple.quarantine /Applications/token-pilot.app
 ```bash
 python3 scripts/reconcile.py month    # 第三方视角独立重算原始日志，与 CLI 逐项对账
 python3 scripts/verify-dashboard.py   # 看板 36 项算法不变量校验
-npm test                              # 49 个单元测试（定价/采集口径/聚合/注入/熔断/RTK）
+npm test                              # 69 个单元测试（定价/采集口径/聚合/注入/熔断/RTK/额度/并发）
 ```
 
 实测修过的口径坑（2026-10-21，本机 4787 个日志文件）：
@@ -111,8 +112,8 @@ npm test                              # 49 个单元测试（定价/采集口径
 
 ## 📊 凭什么信我
 
-- 我自己的 AI 账单就是它管的：本月 **¥7,328 / 38.1 亿 tokens**（2026-10-27 本机实时数据）
-- 36 项看板算法不变量 + 49 个单测 + 独立对账脚本，全部开箱可跑
+- 我自己的 AI 账单就是它管的：本月 **¥8,265 / 47.8 亿 tokens**（2026-10-29 本机实时数据）
+- 36 项看板算法不变量 + 69 个单测 + 独立对账脚本，全部开箱可跑
 - 诚实披露速率口径：日志按「调用完成时刻」记账，生成中的调用完成前不计入（看板内有注明）
 
 ## ⚠️ 什么时候别用它
@@ -120,6 +121,30 @@ npm test                              # 49 个单元测试（定价/采集口径
 - **你想管的工具不写本地用量日志**（Antigravity / Copilot / Cursor 等 12 款）——只能检测到装没装，读不到 token
 - **桌面订阅 App**（Kimi.app / ChatGPT.app）——不按 token 计费，只能登记固定月费
 - **想拦在请求前面节流**——它是事后分析，不拦截请求（拦截需要代理层，在 Roadmap）
+
+## 🔋 订阅额度与余额
+
+账单回答「花了多少钱」，额度回答「还能用多少」。后者来自平台自己的接口，不是本地推算。
+
+| 平台 | 能拿到什么 | 数据来源 |
+|---|---|---|
+| **OpenCode Go** | 滚动 / 本周 / 本月三个窗口的已用百分比 | 官方接口，用 OpenCode 自己的登录态 |
+| **火山方舟** | Agent Plan 的额度绝对值 + 百分比；Coding Plan 的百分比 | 官方 CLI `arkcli usage plan` |
+| **智谱 GLM** | 额度窗口 + 套餐档位 | 官方接口 |
+| **DeepSeek / Moonshot** | 现金余额 | 官方余额接口 |
+| **MiniMax** | Token Plan 剩余量 | 官方接口 |
+
+**凭证从哪来**（三级降级，装了哪个用哪个）：
+
+1. 你在看板「数据设置」里填的 key —— 永远可用
+2. 平台自己的登录凭据（如 OpenCode 的 `~/.local/share/opencode/auth.json`）—— 装了该工具就有
+3. [CC Switch](https://github.com/farion1231/cc-switch) 的配置 —— **装了才自动读取，不装完全可以正常用**
+
+> 第 3 层是便利不是依赖：不装 CC Switch 的用户，填一次 key 就能获得全部额度功能。
+
+**诚实说明**：Coding Plan 类套餐平台只下发百分比，不发绝对值。所以看板上不会出现「已用 1500/20000」这种编造的数字——有什么显示什么。
+
+**节奏判断**：单看「已用 60%」没意义，知道「窗口才过 40% 就已经用了 60%」才知道该不该踩刹车。所以有窗口长度和重置时间的平台，会额外标注「比线性节奏快/慢 N%」。
 
 ## 🧩 它和别的工具有什么不同
 

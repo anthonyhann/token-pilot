@@ -488,6 +488,19 @@ export async function buildDashboardData(
     ? `${fmtCny(today.costUsd * fx)} · ${Math.round(budget.pct)}%`
     : fmtCny(today.costUsd * fx);
 
+  // 额度是可选能力：外部接口慢或挂掉都不能拖住账单。
+  // 8 秒超时，超时就给 null，看板照常显示。
+  let quota: QuotaSnapshot | null = null;
+  try {
+    const { collectQuota } = await import('./quota/index.js');
+    quota = await Promise.race([
+      collectQuota(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+    ]);
+  } catch {
+    quota = null;
+  }
+
   return {
     generatedAt: nowMs,
     usdToCny: fx,
@@ -506,12 +519,14 @@ export async function buildDashboardData(
     savings,
     compression,
     adapters,
+    quota,
     settings,
   };
 }
 
 // ---------- 项目键 ----------
 import os from 'node:os';
+import type { QuotaSnapshot } from './quota/types.js';
 const HOME_DIR = os.homedir();
 function projKey(e: UsageEvent): string {
   if (e.workspace) {
