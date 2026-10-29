@@ -188,6 +188,10 @@ fn sync_error() -> &'static std::sync::Mutex<Option<String>> {
 /// 「数据状态」菜单项句柄：正常运行显示数据新鲜度，出问题显示原因。
 static SYNC_STATUS_REFS: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
 
+/// 「更新失败时的操作建议」菜单项句柄。
+/// 单独一项是因为完整建议太长（含路径和代理地址），塞进状态行会被截断。
+static UPDATE_HINT_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
+
 /// 数据文件变了就刷新托盘（幂等：内容没变就不动）
 fn refresh_tray_if_changed(tray: &tauri::tray::TrayIcon, item: &MenuItem<Wry>) {
     if let Some(v) = read_data() {
@@ -865,8 +869,11 @@ struct UpdateState {
     pending_notes: Option<String>,
     /// 最近一次检查时间的可读描述
     last_check: Option<String>,
-    /// 最近一次失败原因（None = 无错误）
+    /// 最近一次失败原因（None = 无错误）。菜单里只显示这一句，要短。
     last_error: Option<String>,
+    /// 失败原因的可执行操作说明（None = 没有额外建议）。
+    /// 菜单宽度有限放不下，单独一项展示；能复制、能照着做。
+    last_error_hint: Option<String>,
 }
 
 fn update_state() -> &'static std::sync::Mutex<UpdateState> {
@@ -910,6 +917,21 @@ fn sync_update_ui(_app: &tauri::AppHandle) {
         "尚未检查更新".to_string()
     };
     let _ = status_item.set_text(status);
+
+    // 可操作建议：单独一项，避免把状态行挤爆。
+    // 没有建议时整项隐藏（空菜单项会显示成一条空白，很怪）。
+    if let Some(hint_item) = UPDATE_HINT_ITEM.get() {
+        match &st.last_error_hint {
+            Some(h) => {
+                let _ = hint_item.set_text(format!("→ {h}"));
+                let _ = hint_item.set_enabled(true); // 允许选中复制
+            }
+            None => {
+                let _ = hint_item.set_enabled(false);
+                let _ = hint_item.set_text("");
+            }
+        }
+    }
 }
 
 /// 检查更新：发现新版本后**不自动安装**，而是通知用户、在菜单里提供「安装」入口。
@@ -922,6 +944,7 @@ fn check_update(app: &tauri::AppHandle) {
             }
             g.busy = true;
             g.last_error = None;
+            g.last_error_hint = None; // 重试时清掉上一次的建议，别让旧提示挂着
         }
     }
     sync_update_ui(app);
@@ -962,10 +985,63 @@ fn check_update(app: &tauri::AppHandle) {
     });
 }
 
+/// 把更新器的原始报错翻译成用户能直接动手的提示。
+///
+/// 背景：用户实测点「检查更新」只看到
+///   「检查失败 error sending request url」
+/// 这句话既没说清是什么问题，也没说能怎么办。真实情况是 GitHub 连不上
+/// （国内网络常见），用户完全有能力自己解决——只是不知道系统代理能救。
+///
+/// 返回两段式 (菜单短句, 完整操作说明)：
+/// 托盘菜单宽度有限，塞不下完整说明（实测 171 个宽度单位会被截断），
+/// 所以菜单只放一句说清「怎么回事 + 去哪修」，完整步骤放到单独的详情项。
+/// 不认识的错误原样返回，不硬套——编造的提示比没有提示更糟。
+fn explain_update_error(raw: &str) -> (String, Option<String>) {
+    let low = raw.to_lowercase();
+    // 连接类：连不上 / 超时 / DNS 解析失败 / 被重置
+    let is_network = low.contains("error sending request")
+        || low.contains("connection")
+        || low.contains("timed out")
+        || low.contains("timeout")
+        || low.contains("dns")
+        || low.contains("failed to connect")
+        || low.contains("network")
+        || low.contains("tls")
+        || low.contains("handshake")
+        || low.contains("unreachable");
+    if is_network {
+        return (
+            "连不上 github.com（网络被阻断）".to_string(),
+            Some(
+                "开启系统代理后重试：系统设置 › 网络 › 代理 › 勾选网页代理和安全网页代理，\
+                 都填 127.0.0.1:7890。或手动下载：github.com/anthonyhann/token-pilot/releases"
+                    .to_string(),
+            ),
+        );
+    }
+    // 签名校验失败：多半是下载被中间人改写或包坏了
+    if low.contains("signature") || low.contains("verify") || low.contains("minisign") {
+        return (
+            "安装包签名校验失败".to_string(),
+            Some("可能下载被中断或篡改。请重试；若反复出现，改用 Releases 页手动下载".to_string()),
+        );
+    }
+    // 版本 JSON 解析失败：多半是被网络劫持返回了错误页
+    if low.contains("json") || low.contains("parse") || low.contains("deserialize") {
+        return (
+            "更新信息无法解析（可能被劫持）".to_string(),
+            Some("开启系统代理后重试，或到 Releases 页手动下载".to_string()),
+        );
+    }
+    (raw.to_string(), None)
+}
+
 fn set_update_error(app: &tauri::AppHandle, msg: String) {
+    let (short, hint) = explain_update_error(&msg);
     if let Ok(mut g) = update_state().lock() {
         g.busy = false;
-        g.last_error = Some(msg);
+        g.last_error = Some(short);
+        g.last_error_hint = hint;
         g.last_check = Some(now_desc());
     }
     sync_update_ui(app);
@@ -1081,11 +1157,14 @@ fn main() {
                 None::<&str>,
             )?;
             let _ = SYNC_STATUS_REFS.set(sync_i.clone());
+            // 更新失败时的操作建议（默认空且禁用，有错误时才填内容）
+            let hint_i = MenuItem::with_id(app, "update-hint", "", false, None::<&str>)?;
+            let _ = UPDATE_HINT_ITEM.set(hint_i.clone());
             let menu = Menu::with_items(
                 app,
                 &[
-                    &title_i, &panel_i, &dash_i, &mode_i, &upd_i, &upd_status_i, &sync_i, &ver_i,
-                    &quit_i,
+                    &title_i, &panel_i, &dash_i, &mode_i, &upd_i, &upd_status_i, &hint_i, &sync_i,
+                    &ver_i, &quit_i,
                 ],
             )?;
 
@@ -1371,5 +1450,86 @@ mod gui_path_tests {
         uniq.sort();
         uniq.dedup();
         assert_eq!(parts.len(), uniq.len(), "PATH 里有重复项：{p}");
+    }
+}
+
+#[cfg(test)]
+mod update_error_tests {
+    use super::explain_update_error;
+
+    #[test]
+    fn 连接失败给出系统代理和手动下载两条路() {
+        // 用户实测的原文
+        let (short, hint) = explain_update_error("检查失败：error sending request url");
+        assert!(short.contains("github.com"), "要点明连不上谁：{short}");
+        // 菜单短句要够短，否则托盘菜单会截断（实测 171 宽度单位就撑爆）
+        let width: usize = short.chars().map(|c| if c.is_ascii() { 1 } else { 2 }).sum();
+        assert!(width <= 60, "菜单短句太长（{width}）：{short}");
+        let hint = hint.expect("网络错误必须给操作建议");
+        assert!(hint.contains("系统设置"), "要给出系统代理路径：{hint}");
+        assert!(hint.contains("127.0.0.1:7890"), "要给出具体代理地址：{hint}");
+        assert!(hint.contains("releases"), "要给手动下载兜底：{hint}");
+        // 不应该把底层错误原样留在最前面
+        assert!(!short.starts_with("检查失败"), "不该原样透传：{short}");
+    }
+
+    #[test]
+    fn 各种连接类错误都被识别() {
+        for raw in [
+            "error sending request for url (https://github.com/...)",
+            "connection refused",
+            "operation timed out",
+            "dns error: failed to lookup address",
+            "failed to connect to github.com",
+            "tls handshake failure",
+            "network is unreachable",
+        ] {
+            let (_short, hint) = explain_update_error(raw);
+            let hint = hint.unwrap_or_default();
+            assert!(hint.contains("系统代理"), "「{raw}」没被识别为网络错误：{hint}");
+        }
+    }
+
+    #[test]
+    fn 签名失败不被误判成网络问题() {
+        let (short, hint) = explain_update_error("signature verification failed");
+        let hint = hint.unwrap_or_default();
+        assert!(!hint.contains("系统代理"), "签名问题不该建议开代理：{hint}");
+        assert!(short.contains("签名"), "要说清是签名问题：{short}");
+        assert!(hint.contains("手动下载"), "要给兜底方案：{hint}");
+    }
+
+    #[test]
+    fn json解析失败提示可能被劫持() {
+        let (short, _hint) = explain_update_error("failed to parse json: expected value");
+        assert!(short.contains("解析") || short.contains("劫持"), "要说明可能被劫持：{short}");
+    }
+
+    #[test]
+    fn 不认识的错误原样返回不硬套() {
+        let raw = "some totally unknown failure xyz";
+        let (short, hint) = explain_update_error(raw);
+        assert_eq!(short, raw, "不认识的错误应原样返回");
+        assert!(hint.is_none(), "不认识的错误不该编造建议");
+    }
+
+    #[test]
+    fn 空错误不会崩也不编造() {
+        let (short, hint) = explain_update_error("");
+        assert_eq!(short, "");
+        assert!(hint.is_none());
+    }
+}
+
+#[cfg(test)]
+mod update_menu_demo {
+    use super::explain_update_error;
+
+    /// --nocapture 时打印菜单两行的实际样子，方便人工核对长度和措辞
+    #[test]
+    fn print_menu_lines() {
+        let (short, hint) = explain_update_error("检查失败：error sending request url");
+        println!("菜单第 1 行（状态）：上次检查失败：{short}");
+        println!("菜单第 2 行（建议）：→ {}", hint.unwrap_or_default());
     }
 }
