@@ -176,6 +176,18 @@ static TRAY_REFS: std::sync::OnceLock<(tauri::tray::TrayIcon, MenuItem<Wry>)> = 
 static UPDATE_MENU_REFS: std::sync::OnceLock<(MenuItem<Wry>, MenuItem<Wry>)> =
     std::sync::OnceLock::new();
 
+/// 后台 sync 的失败原因（菜单里单独一行展示）。
+/// 和「检查更新」的错误分开存：一个是拿不到数据，一个是拿不到新版本。
+static SYNC_ERROR: std::sync::OnceLock<std::sync::Mutex<Option<String>>> =
+    std::sync::OnceLock::new();
+
+fn sync_error() -> &'static std::sync::Mutex<Option<String>> {
+    SYNC_ERROR.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// 「数据状态」菜单项句柄：正常运行显示数据新鲜度，出问题显示原因。
+static SYNC_STATUS_REFS: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
+
 /// 数据文件变了就刷新托盘（幂等：内容没变就不动）
 fn refresh_tray_if_changed(tray: &tauri::tray::TrayIcon, item: &MenuItem<Wry>) {
     if let Some(v) = read_data() {
@@ -251,13 +263,40 @@ fn spawn_sync_with(done: Option<Box<dyn FnOnce() + Send + 'static>>) {
             }
         }
     };
-    if let Ok(mut child) = spawned {
-        std::thread::spawn(move || {
-            let _ = child.wait();
-            if let Some(f) = done {
-                f();
+    match spawned {
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+                // 启动成功就清掉旧的失败标记，避免用户修好命令后菜单还挂着红字
+                if let Ok(mut g) = sync_error().lock() {
+                    *g = None;
+                }
+                if let Some(item) = SYNC_STATUS_REFS.get() {
+                    let _ = item.set_text("数据已更新");
+                }
+                if let Some(f) = done {
+                    f();
+                }
+            });
+        }
+        Err(e) => {
+            // 以前这里是 `if let Ok(...)`，找不到命令时静默跳过。
+            // 后果很隐蔽：看板照常打开，但数据永远停在旧的那份，
+            // 用户只会觉得「额度板块怎么是空的」。必须把原因说出来。
+            let msg = if e.kind() == std::io::ErrorKind::NotFound {
+                "找不到 token-pilot 命令，数据无法自动更新（npm i -g @anthonyhan/token-pilot 可恢复）".to_string()
+            } else {
+                format!("后台更新启动失败：{e}")
+            };
+            // 单独记在 sync 状态里，不占用「检查更新」的错误位——
+            // 那两件事发生在不同场景，混在一起会让人以为更新器坏了。
+            if let Ok(mut g) = sync_error().lock() {
+                *g = Some(msg.clone());
             }
-        });
+            if let Some(status_item) = SYNC_STATUS_REFS.get() {
+                let _ = status_item.set_text(msg);
+            }
+        }
     }
 }
 
@@ -461,7 +500,15 @@ fn open_dashboard(app: tauri::AppHandle) {
 /// 读过了 profile。踩过一次：用户明明装了 rtk 1.1.0，却报「安装命令执行失败」。
 fn gui_safe_path() -> String {
     let cur = std::env::var("PATH").unwrap_or_default();
-    let mut parts: Vec<String> = cur.split(':').filter(|s| !s.is_empty()).map(String::from).collect();
+    // 去重：用户的 shell profile 常把同一个目录叠好几次（实测一台机器 46 项里有 7 项重复），
+    // 重复项会让子进程的 PATH 越来越长，也让「补了哪些目录」变得难以核对。
+    // 保留第一次出现的位置，语义与 shell 一致。
+    let mut parts: Vec<String> = Vec::new();
+    for d in cur.split(':').filter(|s| !s.is_empty()) {
+        if !parts.iter().any(|p| p == d) {
+            parts.push(d.to_string());
+        }
+    }
 
     // Homebrew（Apple Silicon / Intel 两种前缀）+ 常见用户 bin
     let extra = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/local/sbin"];
@@ -476,6 +523,38 @@ fn gui_safe_path() -> String {
             let p = format!("{home}/{rel}");
             if std::path::Path::new(&p).exists() && !parts.iter().any(|x| x == &p) {
                 parts.push(p);
+            }
+        }
+        // nvm / fnm / volta 装的 node 全局 bin —— `npm i -g token-pilot` 大概率落在这里。
+        // 踩过：token-pilot 命令在 ~/.nvm/versions/node/v24.21.0/bin 下，
+        // GUI 启动的 app 完全看不到，后台 sync 静默不执行，看板一直停在旧数据。
+        // 这里只补本机真实存在的路径；不猜版本号，直接扫目录。
+        for (base, pattern) in [
+            (format!("{home}/.nvm/versions/node"), "bin"),
+            (format!("{home}/.volta/bin"), ""),
+            (format!("{home}/.local/share/fnm/node-versions"), "installation/bin"),
+        ] {
+            let base_path = std::path::Path::new(&base);
+            if !base_path.exists() {
+                continue;
+            }
+            if pattern.is_empty() {
+                if !parts.iter().any(|x| x == &base) {
+                    parts.push(base.clone());
+                }
+                continue;
+            }
+            // 形如 <base>/<version>/<pattern>，扫一层版本目录
+            if let Ok(rd) = std::fs::read_dir(base_path) {
+                for ent in rd.flatten() {
+                    let p = ent.path().join(pattern);
+                    if p.is_dir() {
+                        let s = p.to_string_lossy().to_string();
+                        if !parts.iter().any(|x| x == &s) {
+                            parts.push(s);
+                        }
+                    }
+                }
             }
         }
     }
@@ -987,10 +1066,26 @@ fn main() {
                 None::<&str>,
             )?;
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            // 数据状态：正常时显示数据新鲜度，找不到 token-pilot 命令时显示原因。
+            // 这一行存在的理由：数据不更新是完全静默的——看板照常打开，
+            // 只是数字停在几天前，用户不会怀疑工具坏了，只会觉得「怎么没数据」。
+            let sync_status_text = match sync_error().lock().ok().and_then(|g| g.clone()) {
+                Some(e) => e,
+                None => "数据已更新".to_string(),
+            };
+            let sync_i = MenuItem::with_id(
+                app,
+                "sync-status",
+                sync_status_text,
+                false,
+                None::<&str>,
+            )?;
+            let _ = SYNC_STATUS_REFS.set(sync_i.clone());
             let menu = Menu::with_items(
                 app,
                 &[
-                    &title_i, &panel_i, &dash_i, &mode_i, &upd_i, &upd_status_i, &ver_i, &quit_i,
+                    &title_i, &panel_i, &dash_i, &mode_i, &upd_i, &upd_status_i, &sync_i, &ver_i,
+                    &quit_i,
                 ],
             )?;
 
@@ -1248,4 +1343,33 @@ mod updater_tests {
         assert!(resolve_bin("definitely-not-a-real-binary-xyz").is_none());
     }
 
+}
+
+#[cfg(test)]
+mod gui_path_tests {
+    use super::*;
+
+    #[test]
+    fn gui_safe_path_includes_nvm_bins_when_present() {
+        let p = gui_safe_path();
+        let Some(home) = std::env::var("HOME").ok() else { return };
+        let nvm = format!("{home}/.nvm/versions/node");
+        if !std::path::Path::new(&nvm).exists() {
+            return; // 没装 nvm 的机器跳过
+        }
+        // 装了 nvm 就必须把每个 node 版本的 bin 补进 PATH，
+        // 否则 npm i -g 的 token-pilot 在 GUI 启动的 app 里永远找不到
+        let has_nvm_bin = p.split(':').any(|d| d.starts_with(&format!("{nvm}/")) && d.ends_with("/bin"));
+        assert!(has_nvm_bin, "nvm 的 node bin 没进 PATH：{p}");
+    }
+
+    #[test]
+    fn gui_safe_path_has_no_duplicates() {
+        let p = gui_safe_path();
+        let parts: Vec<&str> = p.split(':').filter(|s| !s.is_empty()).collect();
+        let mut uniq = parts.clone();
+        uniq.sort();
+        uniq.dedup();
+        assert_eq!(parts.len(), uniq.len(), "PATH 里有重复项：{p}");
+    }
 }
