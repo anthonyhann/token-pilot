@@ -8,6 +8,13 @@ import type { ProviderQuota, QuotaSnapshot, RateWindow } from './types.js';
 import { paceDelta, untilReset } from './types.js';
 
 const BAR_WIDTH = 14;
+/** 按终端显示宽度补空格（中文占 2 格） */
+function padDisplay(str: string, width: number): string {
+  let w = 0;
+  for (const ch of str) w += /[\u4e00-\u9fff\uff00-\uffef]/.test(ch) ? 2 : 1;
+  return str + ' '.repeat(Math.max(0, width - w));
+}
+
 
 function bar(percent: number): string {
   const p = Math.max(0, Math.min(100, percent));
@@ -64,8 +71,12 @@ export function formatQuota(snap: QuotaSnapshot): string {
 
     if (p.windows && p.windows.length > 0) {
       for (const w of p.windows) {
-        lines.push(`  ${w.label}`);
-        lines.push(...windowLine(w, ''));
+        const pct = `${w.percent.toFixed(w.percent < 10 ? 1 : 0)}%`.padStart(5);
+        const abs =
+          typeof w.used === 'number' && typeof w.total === 'number' ? `  ${w.used}/${w.total}` : '';
+        const reset = untilReset(w);
+        const resetStr = reset ? `  ${reset}刷新` : '';
+        lines.push(`    ${padDisplay(w.label, 14)} ${bar(w.percent)} ${pct}${abs}${resetStr}${paceMark(w)}`);
       }
     }
     if (p.tokenPlan) {
