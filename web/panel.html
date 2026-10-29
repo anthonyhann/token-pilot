@@ -240,6 +240,19 @@ body.closed .reopen:hover{color:var(--fg)}
 .open-full:focus-visible{outline:2px solid var(--info);outline-offset:2px}
 .p-foot .note{color:var(--muted);font-size:10.5px;text-align:right}
 
+/* 右下角缩放手柄：无边框窗口没有系统边框，用三条斜线示意可拖。
+   放在最上层（z-index）并留出热区，否则会被 footer 的透明区域挡住点不到。 */
+.panel{position:relative}
+.resize-grip{position:absolute;right:2px;bottom:2px;width:16px;height:16px;z-index:5;cursor:nwse-resize;
+  display:grid;place-items:center;border-radius:0 0 17px 0;transition:background .15s var(--ease)}
+.resize-grip::after{content:"";width:8px;height:8px;
+  background:
+    linear-gradient(135deg,transparent 42%,var(--muted) 42%,var(--muted) 52%,transparent 52%),
+    linear-gradient(135deg,transparent 66%,var(--muted) 66%,var(--muted) 76%,transparent 76%);
+  opacity:.55;transition:opacity .15s var(--ease)}
+.resize-grip:hover{background:color-mix(in oklab,var(--info) 12%,transparent)}
+.resize-grip:hover::after{opacity:1}
+
 @media (max-width:460px){
   .stage{padding:14px 8px 24px}
   .kpis{grid-template-columns:repeat(2,1fr)}
@@ -368,6 +381,10 @@ body.closed .reopen:hover{color:var(--fg)}
       <a class="open-full" href="http://127.0.0.1:17895/">打开完整看板<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></a>
       <span class="note">本地运行 · 数据不出本机</span>
     </footer>
+    <!-- 缩放手柄：无边框窗口没有系统边框，只能自己做一个。
+         只放右下角一个角柄：菜单栏弹窗常见需求是「稍微放大看更多」，
+         四条边都放反而容易误触。 -->
+    <div class="resize-grip" id="resizeGrip" title="拖动调整大小" aria-label="调整面板大小"></div>
   </aside>
 </div>
 
@@ -440,6 +457,30 @@ body.closed .reopen:hover{color:var(--fg)}
   }else{
     openFull.setAttribute("href","http://127.0.0.1:17895/");
   }
+
+  /* ===== 面板缩放 =====
+     无边框窗口（decorations:false）没有系统边框可拖，这里自己实现：
+     按住右下角手柄时调 Rust 的 start_resize_dragging，交给系统做真正的
+     拖拽缩放（比在 JS 里算 setSize 平滑，也没有抖动）。
+     拖完（鼠标松开）把尺寸存进 config.json，下次启动恢复。
+     位置不存：每次打开仍然贴托盘图标，这是菜单栏弹窗该有的行为。 */
+  (function initResize(){
+    var grip=document.getElementById("resizeGrip");
+    if(!grip)return;
+    if(!tauriInvoke){grip.style.display="none";return} // 浏览器里预览面板时没有意义
+    var dragging=false;
+    grip.addEventListener("mousedown",function(e){
+      e.preventDefault();
+      dragging=true;
+      try{tauriInvoke("start_panel_resize",{direction:"se"}).then(function(){},function(){})}catch(x){}
+    });
+    // 松手就落盘：拖拽期间系统在改尺寸，频繁写盘没意义
+    window.addEventListener("mouseup",function(){
+      if(!dragging)return;
+      dragging=false;
+      try{tauriInvoke("save_panel_size_cmd",{width:0,height:0}).then(function(){},function(){})}catch(x){}
+    });
+  })();
 
   /* ===== 数据到达前的静态 spark 占位 ===== */
   document.querySelectorAll(".spark[data-spark]").forEach(function(el){

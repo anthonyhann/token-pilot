@@ -482,6 +482,112 @@ fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+// ───────────────────────── 面板尺寸 ─────────────────────────
+//
+// 面板是无边框窗口（decorations:false），系统不给拖拽缩放的边框，
+// 只能自己在边缘放手柄 + 调 start_resize_dragging。
+//
+// 位置依旧由 position_panel_at 每次贴托盘图标计算（菜单栏 popover 的手感），
+// 只有尺寸由用户决定并持久化——所以这里只存宽高，不存坐标。
+
+const PANEL_MIN_W: u32 = 400;
+const PANEL_MAX_W: u32 = 720;
+const PANEL_MIN_H: u32 = 520;
+const PANEL_MAX_H: u32 = 1000;
+
+fn clamp_panel_size(w: u32, h: u32) -> (u32, u32) {
+    (w.clamp(PANEL_MIN_W, PANEL_MAX_W), h.clamp(PANEL_MIN_H, PANEL_MAX_H))
+}
+
+/// 读用户调过的面板尺寸（逻辑像素）。没有记录就是 None，用配置里的默认值。
+fn load_panel_size() -> Option<(u32, u32)> {
+    let p = home_dir().join(".token-pilot").join("config.json");
+    let v: Value = serde_json::from_str(&fs::read_to_string(p).ok()?).ok()?;
+    let pe = v.get("panelSize")?;
+    let w = pe.get("width")?.as_u64()? as u32;
+    let h = pe.get("height")?.as_u64()? as u32;
+    if w == 0 || h == 0 {
+        return None; // 坏数据当没有，别把窗口设成 0×0
+    }
+    Some(clamp_panel_size(w, h))
+}
+
+/// 把面板尺寸写进 config.json，保留文件里其他字段。
+fn save_panel_size(w: u32, h: u32) {
+    let (w, h) = clamp_panel_size(w, h);
+    let p = home_dir().join(".token-pilot").join("config.json");
+    let mut cur: Value = fs::read_to_string(&p)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    cur["panelSize"] = serde_json::json!({ "width": w, "height": h });
+    if let Some(dir) = p.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    if let Ok(s) = serde_json::to_string_pretty(&cur) {
+        let _ = fs::write(&p, s);
+    }
+}
+
+/// 前端拖到边缘时调用：开始系统级的缩放拖拽。
+///
+/// 注意用 `tauri::Window` 而不是 `WebviewWindow`：start_resize_dragging
+/// 定义在 Window 上，WebviewWindow 没有转发这个方法。
+#[tauri::command]
+fn start_panel_resize(window: tauri::Window, direction: String) {
+    use tauri_runtime::ResizeDirection;
+    let dir = match direction.as_str() {
+        "e" | "east" => ResizeDirection::East,
+        "w" | "west" => ResizeDirection::West,
+        "n" | "north" => ResizeDirection::North,
+        "s" | "south" => ResizeDirection::South,
+        "ne" => ResizeDirection::NorthEast,
+        "nw" => ResizeDirection::NorthWest,
+        "se" => ResizeDirection::SouthEast,
+        "sw" => ResizeDirection::SouthWest,
+        _ => return,
+    };
+    let _ = window.start_resize_dragging(dir);
+}
+
+/// 缩放结束后前端调用：把当前尺寸存下来。
+#[tauri::command]
+fn save_panel_size_cmd(window: tauri::Window, width: u32, height: u32) {
+    // 用窗口实测尺寸兜底，避免前端传上来的值和实际不一致
+    let (w, h) = window
+        .inner_size()
+        .map(|s| (s.width, s.height))
+        .unwrap_or((width, height));
+    let scale = window.scale_factor().unwrap_or(1.0);
+    // 存逻辑尺寸：换显示器（不同缩放）后仍然合理
+    save_panel_size(
+        (w as f64 / scale).round() as u32,
+        (h as f64 / scale).round() as u32,
+    );
+}
+
+/// 恢复默认尺寸（菜单项调用）。
+#[tauri::command]
+fn reset_panel_size(window: tauri::Window) {
+    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+        width: 480.0,
+        height: 760.0,
+    }));
+    save_panel_size(480, 760);
+}
+
+/// 菜单里调用：那里拿到的是 WebviewWindow（WebviewWindow 与 Window 不通用），
+/// 尺寸逻辑同样是「设回 480×760 并落盘」，单独走一条。
+fn reset_panel_size_from_webview(w: &tauri::WebviewWindow) {
+    let _ = w.set_size(tauri::Size::Logical(tauri::LogicalSize {
+        width: 480.0,
+        height: 760.0,
+    }));
+    save_panel_size(480, 760);
+}
+
+
+
 #[tauri::command]
 fn open_dashboard(app: tauri::AppHandle) {
     open_dashboard_impl(&app);
@@ -1104,7 +1210,10 @@ fn main() {
             hide_panel,
             open_dashboard,
             save_config,
-            app_version
+            app_version,
+            start_panel_resize,
+            save_panel_size_cmd,
+            reset_panel_size
         ])
         .setup(|app| {
             // 让 ~/.token-pilot/dashboard.html 与 app 内置版本保持一致：
@@ -1114,6 +1223,15 @@ fn main() {
             // macOS：Accessory 模式 = 无 Dock 图标、无菜单栏应用菜单，纯状态栏驻留
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // 恢复用户上次调过的面板尺寸（位置不恢复：每次仍贴托盘图标，
+            // 这是菜单栏弹窗该有的样子）
+            if let (Some((w, h)), Some(win)) = (load_panel_size(), app.get_webview_window("main")) {
+                let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                    width: w as f64,
+                    height: h as f64,
+                }));
+            }
 
             let data = read_data();
 
@@ -1130,6 +1248,9 @@ fn main() {
             // update-status 只读，展示上次检查结果/失败原因
             let upd_i = MenuItem::with_id(app, "install-update", "检查更新", true, None::<&str>)?;
             let mode_i = MenuItem::with_id(app, "toggle-mode", "切换为额度显示", true, None::<&str>)?;
+            // 面板尺寸：拖右下角可调，尺寸会被记住；这条用来一键还原
+            let reset_size_i =
+                MenuItem::with_id(app, "reset-panel-size", "面板恢复默认尺寸", true, None::<&str>)?;
             let upd_status_i =
                 MenuItem::with_id(app, "update-status", "尚未检查更新", false, None::<&str>)?;
             // 版本号：只读灰字，放在更新项下面——用户想确认「我是哪一版 / 更新有没有装上」
@@ -1163,8 +1284,8 @@ fn main() {
             let menu = Menu::with_items(
                 app,
                 &[
-                    &title_i, &panel_i, &dash_i, &mode_i, &upd_i, &upd_status_i, &hint_i, &sync_i,
-                    &ver_i, &quit_i,
+                    &title_i, &panel_i, &dash_i, &mode_i, &reset_size_i, &upd_i, &upd_status_i,
+                    &hint_i, &sync_i, &ver_i, &quit_i,
                 ],
             )?;
 
@@ -1191,6 +1312,11 @@ fn main() {
                     "quit" => app.exit(0),
                     "open-panel" => show_panel(app),
                     "open-dashboard" => open_dashboard_impl(app),
+                    "reset-panel-size" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            reset_panel_size_from_webview(&w);
+                        }
+                    }
                     "toggle-mode" => {
                         let now_quota = {
                             if let Ok(mut g) = tray_mode().lock() {
@@ -1531,5 +1657,29 @@ mod update_menu_demo {
         let (short, hint) = explain_update_error("检查失败：error sending request url");
         println!("菜单第 1 行（状态）：上次检查失败：{short}");
         println!("菜单第 2 行（建议）：→ {}", hint.unwrap_or_default());
+    }
+}
+
+#[cfg(test)]
+mod panel_size_tests {
+    use super::{clamp_panel_size, PANEL_MAX_H, PANEL_MAX_W, PANEL_MIN_H, PANEL_MIN_W};
+
+    #[test]
+    fn 尺寸限制在合理区间内() {
+        // 太小会挤坏排版，太大在菜单栏弹窗里没有意义
+        assert_eq!(clamp_panel_size(100, 100), (PANEL_MIN_W, PANEL_MIN_H));
+        assert_eq!(clamp_panel_size(9999, 9999), (PANEL_MAX_W, PANEL_MAX_H));
+        // 正常范围原样返回
+        assert_eq!(clamp_panel_size(520, 700), (520, 700));
+        // 边界值本身合法
+        assert_eq!(clamp_panel_size(PANEL_MIN_W, PANEL_MIN_H), (PANEL_MIN_W, PANEL_MIN_H));
+        assert_eq!(clamp_panel_size(PANEL_MAX_W, PANEL_MAX_H), (PANEL_MAX_W, PANEL_MAX_H));
+    }
+
+    #[test]
+    fn 默认尺寸在合法范围内() {
+        // 恢复默认用的是 480×760，必须落在区间内，否则会被 clamp 成别的值
+        let (w, h) = clamp_panel_size(480, 760);
+        assert_eq!((w, h), (480, 760));
     }
 }

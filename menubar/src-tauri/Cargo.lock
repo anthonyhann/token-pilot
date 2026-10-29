@@ -4193,6 +4193,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-notification",
  "tauri-plugin-updater",
+ "tauri-runtime",
 ]
 
 [[package]]
