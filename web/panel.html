@@ -381,23 +381,26 @@ body.closed .reopen:hover{color:var(--fg)}
   try{if(T){tauriInvoke=(T.core&&T.core.invoke)||T.invoke||null}}catch(e){tauriInvoke=null}
 
   /* ===== 版本号 =====
-     来源优先级（高 → 低），因为两边的更新节奏不同：
+     只显示「当前运行的程序」版本，来源优先级：
        1. app_version（Tauri 命令）：正在跑的二进制版本，权威
-       2. __TP_DATA__.appVersion（数据文件）：数据是哪个版本的 CLI 生成的
-       3. 都没有就不显示（老数据 + 浏览器打开）
-     两个都有且不一致时如实显示「app vX · 数据 vY」——这正是自动更新后
-     「二进制升了、后台 sync 还没跑」或反过来时的真实现状，藏起来反而误导。 */
+       2. __TP_DATA__.appVersion（数据文件）：仅在拿不到 1 时兜底
+          （浏览器直接打开面板，没有 Tauri 环境）
+       3. 都没有就不显示
+     刻意不把两者并列。数据文件由 CLI 生成，npm 装 CLI 往往比 app
+     自动更新快，两者不一致是常态；并列显示「v0.4.1 · 数据 v0.4.2」
+     只会让人以为出了问题。 */
   var APP_VER=null;
   function setVer(){
     var el=document.querySelector(".p-head .ver-badge");
     if(!el)return;
-    var app=APP_VER;
-    var data=D&&D.appVersion||null;
-    var txt="";
-    if(app&&data&&app!==data)txt="v"+app+" · 数据 v"+data;
-    else if(app||data)txt="v"+(app||data);
+    // 只显示**当前运行的程序**版本。数据文件里的 appVersion 是生成数据的
+    // CLI 的版本，两者节奏不同（npm 装 CLI 比 app 自动更新快是常态），
+    // 并列成「v0.4.1 · 数据 v0.4.2」会让人以为哪里坏了——那不是错误，
+    // 也不是用户需要关心的信息。只有拿不到 app 版本（浏览器打开面板）时，
+    // 才退回用数据版本，避免完全不显示。
+    var txt=APP_VER?"v"+APP_VER:(D&&D.appVersion?"v"+D.appVersion:"");
     el.textContent=txt;
-    el.title=(app&&data&&app!==data)?"当前程序 v"+app+"，数据由 v"+data+" 生成":"当前版本";
+    el.title="当前版本";
   }
   if(tauriInvoke){
     try{tauriInvoke("app_version").then(function(v){if(v){APP_VER=String(v);setVer()}},function(){})}catch(e){}

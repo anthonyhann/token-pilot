@@ -1402,14 +1402,15 @@ function renderTok(){
 }
 
 /* ---------- footer ---------- */
-/* 版本号：app_version（正在跑的二进制）优先，退到数据里的 appVersion；
-   两者都有却不一致时如实并列——这能一眼看出「二进制升了、数据还是旧的」。 */
+/* 版本号：只显示正在运行的二进制版本（app_version 命令）。
+   数据里的 appVersion 是生成数据的 CLI 版本，两条更新路径节奏不同
+   （npm 装 CLI 常比 app 自动更新快），并列显示会让人误以为出错了。
+   拿不到 app 版本时（浏览器直接打开看板）才退回数据版本。 */
 var APP_VER=null;
 function verText(){
-  var app=APP_VER, data=(D&&D.appVersion)||null;
-  if(app&&data&&app!==data)return "v"+app+" · 数据 v"+data;
-  if(app||data)return "v"+(app||data);
-  return "";
+  if(APP_VER)return "v"+APP_VER;
+  var data=(D&&D.appVersion)||null;
+  return data?"v"+data:"";
 }
 if(inTauri()&&window.__TAURI__.core){
   try{
