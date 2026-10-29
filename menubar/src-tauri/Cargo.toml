@@ -6,6 +6,7 @@ description = "token-pilot 菜单栏 — AI 账单托盘（macOS + Windows）"
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-runtime = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
