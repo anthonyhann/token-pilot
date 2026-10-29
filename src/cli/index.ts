@@ -290,6 +290,13 @@ async function main() {
   if (cmd === 'dash') return cmdDash();
   if (cmd === 'prices') return cmdPrices();
   if (cmd === 'compress-report') return cmdCompressReport();
+  if (cmd === 'quota') {
+    const { collectQuota } = await import('../core/quota/index.js');
+    const { formatQuota } = await import('../core/quota/format.js');
+    const snap = await collectQuota(process.argv.includes('--force'));
+    console.log(formatQuota(snap));
+    return;
+  }
   if (cmd === 'doctor') {
     const { runDoctor, formatDoctor } = await import('../core/doctor.js');
     const report = await runDoctor();
@@ -301,7 +308,7 @@ async function main() {
   if (cmd === 'today' || cmd === 'month' || cmd === 'report' || cmd === 'all') {
     return cmdReport(cmd === 'all' ? 'all' : cmd);
   }
-  console.log('用法：token-pilot [today|month|report|sync|dash|serve|prices|doctor]');
+  console.log('用法：token-pilot [today|month|report|sync|dash|serve|prices|quota|doctor]');
 }
 
 main().catch((e) => {
