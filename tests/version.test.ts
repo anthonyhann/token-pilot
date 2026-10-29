@@ -68,3 +68,31 @@ test('打包副本与源同步（Tauri 真正打包的是 menubar/src）', () =>
     );
   }
 });
+
+test('版本号只显示程序版本，不并列数据版本', () => {
+  // 用户实测踩到：面板头部显示「v0.4.1 · 数据 v0.4.2」。
+  // 两个数字都是真的，但数据版本由 CLI 生成、节奏和 app 不同，
+  // 并列只会让人以为出错了。规则：优先 app 版本，拿不到才用数据版本，
+  // 任何情况下都不并列。
+  // 只检查可执行代码，跳过注释块——注释里会引用这个反例做说明
+  const stripComments = (s: string) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  for (const [name, file] of [['面板', 'web/panel.html'], ['看板', 'web/dashboard.html']]) {
+    const code = stripComments(readFileSync(resolve(ROOT, file), 'utf8'));
+    assert.ok(
+      !/["'`][^"'`]*·\s*数据\s*v/.test(code),
+      `${name} 的代码里仍有「· 数据 vX」这种拼接`,
+    );
+  }
+});
+
+test('版本号回退顺序：app_version 优先，其次数据里的 appVersion', () => {
+  const panel = readFileSync(resolve(ROOT, 'web/panel.html'), 'utf8');
+  const dash = readFileSync(resolve(ROOT, 'web/dashboard.html'), 'utf8');
+  // 面板：APP_VER 存在时直接用，否则退回 D.appVersion
+  assert.match(panel, /APP_VER\?"v"\+APP_VER/, '面板应先取程序版本');
+  assert.match(panel, /D\.appVersion\?"v"\+D\.appVersion/, '面板需有数据版本兜底');
+  // 看板：同理
+  assert.match(dash, /if\(APP_VER\)return "v"\+APP_VER/, '看板应先取程序版本');
+  assert.match(dash, /数据版本|appVersion\)\|\|null/, '看板需有数据版本兜底');
+});
