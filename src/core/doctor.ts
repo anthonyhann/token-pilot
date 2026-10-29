@@ -7,7 +7,7 @@
 //
 // 所以 doctor 的核心职责是：把「你以为在读但实际没读到」的地方摊开来说清楚。
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { CONFIG_DIR, CONFIG_PATH, DATA_PATH, loadConfig } from './config.js';
 import { loadPricing } from './pricing.js';
 import { ALL_ADAPTERS } from './collector.js';
@@ -50,6 +50,51 @@ function dataAgeMinutes(): number | null {
   }
 }
 
+/**
+ * 检测「brew cask 与 app 自带更新器抢同一个 app」。
+ *
+ * 判定依据（任一成立即可报警，不要求 brew 命令可用）：
+ *   1. Homebrew 的 Caskroom 里存在 token-pilot 记录 —— 说明这个 app 曾被 brew 装着；
+ *   2. 存在 brew 的软链 Caskroom/<ver>/token-pilot.app 指向 /Applications 下的同名 app。
+ *
+ * 冲突后果（真实踩过）：Tauri updater 原地覆盖 /Applications 里的 app，
+ * brew 记录仍停在旧版本号，且 brew 会把这个软链当坏安装修，两个更新器互踩，
+ * 用户只看到「检查更新失败」「brew upgrade 不起作用」。
+ *
+ * 只读检测，不执行 brew 命令（GUI 启动的进程 PATH 里常常没有 brew）。
+ */
+export function detectUpdaterConflict(): CheckItem | null {
+  const caskroom = [
+    '/opt/homebrew/Caskroom/token-pilot',
+    '/usr/local/Caskroom/token-pilot',
+  ].find((p) => existsSync(p));
+  if (!caskroom) return null;
+
+  // 读出 Caskroom 目录里记着的版本（目录名就是 brew 认为的版本）
+  let versions: string[] = [];
+  try {
+    versions = readdirSync(caskroom).filter((n) => /^\d+\.\d+/.test(n));
+  } catch {
+    /* 读不到就当没记录 */
+  }
+  const appLink = versions
+    .map((v) => path.join(caskroom, v, 'token-pilot.app'))
+    .find((p) => existsSync(p));
+  const verText = versions.length ? `brew 记录版本 ${versions.join(', ')}` : 'brew 有安装记录';
+
+  return {
+    level: 'warn',
+    title: '更新通道冲突（brew 与自动更新抢同一个 app）',
+    detail:
+      `${caskroom} 存在，说明这个 app 曾被 Homebrew 安装（${verText}）。` +
+      'app 自带的自动更新会原地覆盖 /Applications 里的程序，而 brew 仍按自己的记录管理，' +
+      '两边互踩会导致「检查更新失败」或 brew upgrade 反而装回旧版。',
+    fix:
+      '二选一：① 只用自动更新 —— `brew uninstall --cask token-pilot`（app 保留在 /Applications）；' +
+      '② 只用 brew —— 别点「安装更新」，每次 `brew upgrade --cask token-pilot`',
+  };
+}
+
 export async function runDoctor(): Promise<DoctorReport> {
   const items: CheckItem[] = [];
   const push = (i: CheckItem) => items.push(i);
@@ -65,6 +110,13 @@ export async function runDoctor(): Promise<DoctorReport> {
       fix: '跑一次 `token-pilot sync` 就会建好',
     });
   }
+
+  // ── 1b. 更新通道冲突：brew cask 与 app 自带更新器抢同一个 app ──
+  // 真实踩过：brew 装的 app 被 Tauri updater 原地覆盖成新版本，brew 仍记着
+  // 旧版本号；于是 `brew upgrade` 会倒退、而 updater 又被 brew 的软链结构
+  // 绊住——两边都更新不动，用户只看到「检查更新失败」。
+  const conflict = detectUpdaterConflict();
+  if (conflict) push(conflict);
 
   // ── 2. 采集宿主：逐个检测，重点说清「装了但读不到」 ──
   const detected: string[] = [];

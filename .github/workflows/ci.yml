@@ -1,0 +1,63 @@
+# 每次 push / PR 就跑的快速校验，不构建安装包。
+#
+# 存在的理由：build-desktop 只在打 tag 时触发，等于「改坏了要等发版才发现」。
+# 这里把能在秒级跑完的检查挪到前面：
+#   - RELEASE_NOTES 抽取 + Markdown 剥离（v0.4.1 弹窗里显示字面 **星号** 就是漏了这层）
+#   - 前端打包副本与源同步
+#   - TS 类型检查 + 前端单测
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 版本号三处一致（package.json / tauri.conf.json / Cargo.toml）
+        run: |
+          set -e
+          V_PKG=$(node -e "console.log(require('./package.json').version)")
+          V_CONF=$(node -e "console.log(require('./menubar/src-tauri/tauri.conf.json').version)")
+          V_CARGO=$(grep -m1 '^version' menubar/src-tauri/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
+          echo "pkg=$V_PKG conf=$V_CONF cargo=$V_CARGO"
+          for v in "$V_CONF" "$V_CARGO"; do
+            [ "$v" = "$V_PKG" ] || { echo "::error::版本号不一致：package.json=$V_PKG，另一处=$v"; exit 1; }
+          done
+
+      - name: 发布说明可抽取且已剥 Markdown
+        run: |
+          set -e
+          # 对每个历史版本跑一遍，任何一版剥离后残留标记都会挂
+          for v in $(grep -oE '^## v[0-9.]+' RELEASE_NOTES.md | sed 's/## v//'); do
+            python3 scripts/release_notes.py "$v" > /dev/null
+          done
+          echo "全部版本通过"
+          echo "--- 最新一版的实际输出（给 reviewer 看）---"
+          python3 scripts/release_notes.py "$(grep -oE '^## v[0-9.]+' RELEASE_NOTES.md | head -1 | sed 's/## v//')"
+
+      - name: 打包资源与源同步
+        run: npm run verify:assets
+
+      - name: 类型检查
+        run: npx tsc --noEmit
+
+      - name: 前端单测
+        run: npm test
