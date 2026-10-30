@@ -14,6 +14,44 @@ import { computeCompression } from './compression.js';
 import { buildAdapterTiers, HOST_TIERS } from './registry.js';
 import { APP_VERSION } from './version.js';
 
+/**
+ * 目录里挑一批「大概率会用到」的模型，给全新用户做默认单价行。
+ *
+ * 为什么需要：设置面板的模型单价原本只列「近 30 天日志里出现过的模型」，
+ * 全新用户没有任何日志，列表就是空的——想改价都不知道该填哪些模型名。
+ *
+ * 挑选依据：先给各家的旗舰与常用款，覆盖主流宿主默认会用的模型；
+ * 不追求全量（44 个全列会淹没面板），也绝不覆盖用户已在用/已覆写的条目。
+ */
+const PREFERRED_MODEL_ORDER = [
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
+  'gpt-5',
+  'gemini-3-pro',
+  'gemini-3-flash',
+  'deepseek-v4-pro',
+  'deepseek-v4.1-flash',
+  'glm-5.3',
+  'glm-5',
+  'kimi-k2',
+  'qwen3-coder',
+];
+
+function commonModelNames(pricing: PricingTable): string[] {
+  const have = new Set(Object.keys(pricing.models));
+  const out: string[] = [];
+  for (const n of PREFERRED_MODEL_ORDER) {
+    if (have.has(n)) out.push(n);
+  }
+  // 偏好的都没命中（定价表改名了）：退回按表内顺序取前若干个，
+  // 保证任何版本的定价表都不会让这块又变空。
+  if (out.length === 0) {
+    return Object.keys(pricing.models).slice(0, 8);
+  }
+  return out;
+}
+
 const AGENT_NAMES: Record<string, string> = {
   'claude-code': 'Claude Code',
   'kimi-code': 'Kimi Code',
@@ -812,6 +850,16 @@ async function buildSettings(
   const names = [...costByModel.keys()];
   for (const k of Object.keys(cfg.priceOverrides ?? {})) {
     if (!names.includes(k)) names.push(k);
+  }
+  // 全新用户没有任何日志 → names 为空 → 设置面板「本地模型单价」整块空白，
+  // 想手工填价都不知道该填哪些模型名。这里补一批目录里的常用模型做默认行，
+  // 让用户一打开就能看到价格、直接改，而不是面对空列表。
+  // 只补到还缺的位置，不覆盖已从日志里识别出的真实在用模型。
+  if (names.length < 12) {
+    for (const name of commonModelNames(pricing)) {
+      if (names.length >= 12) break;
+      if (!names.includes(name)) names.push(name);
+    }
   }
   const models = names.slice(0, 12).map((name) => {
     const p = priceFor(name, pricing);

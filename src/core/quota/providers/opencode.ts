@@ -22,6 +22,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import type { ProviderQuota, RateWindow } from '../types.js';
 import { fromConfig, fromCcSwitch } from '../credentials.js';
+import { explainQuotaError } from '../errors.js';
 
 const execFileP = promisify(execFile);
 
@@ -114,7 +115,7 @@ export async function fetchOpencodeQuota(): Promise<ProviderQuota> {
       ? '凭证无效或已过期，请在 OpenCode 里重新登录'
       : /403/.test(res.__error)
         ? '接口拒绝访问（403）——若刚登录过请重试'
-        : res.__error;
+        : explainQuotaError(res.__error);
     return { ...base, error: hint };
   }
   if (!res.usage) {
