@@ -161,6 +161,33 @@ npm test                              # 69 个单元测试（定价/采集口径
 
 本工具的正确包名是带 scope 的 **`@anthonyhan/token-pilot`**，安装命令都在上面，照抄即可。
 
+## 👥 开发者与交流
+
+一个人 + 几个 AI Agent 在做，想法和坑都摆在明面上。**token-pilot 是本地工具，你的账单数据不会离开本机**，所以交流群里聊的主要是「怎么算得更准」「怎么支持更多工具」，不用发任何日志或账单截图。
+
+### 微信交流群：让 AI 先试试
+
+<img src="docs/assets/community-group.png" width="240" alt="微信群「让 AI 先试试」入群二维码">
+
+扫码进群。适合：用着遇到问题想问、想提新工具/新平台的接入需求、或者单纯想看看别人怎么管理 AI 账单。
+
+> ⏳ 群二维码 **2026 年 11 月 6 日前有效**。过期后扫码会失败——到 [Discussions](https://github.com/anthonyhann/token-pilot/discussions) 留言，或在 [Issues](https://github.com/anthonyhann/token-pilot/issues/new/choose) 提一句，我更新二维码并回复你新的入群方式。
+
+### 其他渠道
+
+| 渠道 | 适合什么 |
+|---|---|
+| [Discussions](https://github.com/anthonyhann/token-pilot/discussions) | 「这个模型算得对不对」「能不能支持某某工具」——公开讨论，后来的人搜得到 |
+| [Issues](https://github.com/anthonyhann/token-pilot/issues/new/choose) | 数据算错、功能异常，需要跟进修的问题 |
+| [X @AnthonyHan_](https://x.com/AnthonyHan_) | 私信催更、聊产品想法 |
+| [bmomhan@gmail.com](mailto:bmomhan@gmail.com) | 商务、赞助、其他不方便公开的事 |
+
+### 想参与开发
+
+- **写 adapter**：新增一个 AI 工具的支持，只需要在 `src/adapters/` 下实现 `detect()` + `collect()`，不需要读任何中心服务。想接哪个工具，先开 Discussion 说一声，避免撞车
+- **提 PR**：`npm test` 和 `cargo test` 必须全绿，`.github/workflows/ci.yml` 会在每次 push 自动跑；分支合并前请保持工作区干净
+- **报数据不准**：最有价值的反馈。附上「哪个工具、哪个模型、你预期的数字、token-pilot 显示的数字」就够了，不用贴原始日志
+
 ## 💬 参与讨论
 
 - **[Discussions](https://github.com/anthonyhann/token-pilot/discussions)** ——「这个模型算得对不对」「能不能支持某某工具」这类问题放这里，比开 issue 合适

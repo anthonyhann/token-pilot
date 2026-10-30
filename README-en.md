@@ -146,6 +146,14 @@ Free & MIT. If it saved you money on AI bills, buy me a coffee (Alipay / WeChat 
 
 ⭐ Star = vote for your host: the next adapter gets built for the most-nominated tool.
 
+## 👥 Community
+
+- **[Discussions](https://github.com/anthonyhann/token-pilot/discussions)** — "is this model priced right?", "can you support tool X?"
+- **[Issues](https://github.com/anthonyhann/token-pilot/issues/new/choose)** — wrong numbers, bugs
+- **WeChat group** "让 AI 先试试 (Let AI try first)" — mostly Chinese-speaking, QR code in the [Chinese README](README.md#-开发者与交流). The QR expires; ping me on Discussions if it's dead.
+
+Contributions welcome — writing an adapter just needs `detect()` + `collect()` in `src/adapters/`. `npm test` and `cargo test` must be green; CI runs on every push.
+
 ## 🙋 About me
 
 A solo dev + a few AI agents running product experiments (remote, Xi'an). token-pilot is what I actually use daily — it first caught a kimi-code session stuck in a 120-call retry loop, then told me caching saved me ¥3,048 this month.
