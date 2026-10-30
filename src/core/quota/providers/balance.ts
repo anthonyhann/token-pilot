@@ -16,6 +16,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { ProviderQuota, RateWindow } from '../types.js';
 import { resolveKey } from '../credentials.js';
+import { explainQuotaError } from '../errors.js';
 
 const execFileP = promisify(execFile);
 
@@ -43,10 +44,11 @@ except Exception as e:
       { timeout: 20_000 },
     );
     const d = JSON.parse(stdout) as { __error?: string };
-    if (d.__error) return { ok: false, error: d.__error };
+    // 底层异常（Python urllib 的原始报错）翻译成人话，别把 traceback 甩给用户
+    if (d.__error) return { ok: false, error: explainQuotaError(d.__error) };
     return { ok: true, data: d };
   } catch (e) {
-    return { ok: false, error: String(e).slice(0, 150) };
+    return { ok: false, error: explainQuotaError(String(e).slice(0, 150)) };
   }
 }
 
