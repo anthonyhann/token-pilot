@@ -228,29 +228,45 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 
 ## ✅ TODO LIST
 
+图例：`[x]` 已完成 · `[ ]` 计划中 · `[⏸]` 卡在外部条件，短期不会动（原因写在后面）
+
 **采集覆盖**
 - [x] OpenCode adapter（SQLite）
 - [x] Qoder adapter（仅会话数，model 全为 auto——诚实标注）
 - [x] pi adapter
 - [x] Cursor spike（结论：无 token 用量数据，ai-code-tracking 是代码追踪非用量 → 诚实归「仅检测」）
 - [x] 云端用量 API：Doubao 火山（arkcli usage stats，日粒度）
-- [ ] 云端用量 API：OpenAI / Kimi 开放平台（需用户配 API key）
+- [⏸] 云端用量 API：OpenAI / Kimi 开放平台
+  - **实测结论**（2026-11 探测）：Kimi 开放平台**没有公开的用量查询端点**——`/v1/users/me/balance` 存在（401 需鉴权），但 `/v1/usage`、`/v1/users/me/usage`、`/api/v1/usage` 全部 404。目前只能查余额，查不到「今天用了多少」
+  - OpenAI 有 `/v1/organization/usage/*` 这类用量端点，但都是组织级接口，需要 Organization Admin key 才能调。**我没有 admin key，无法验证个人 key 是否也可用**——所以这项标「卡住」而不是「简单待办」
+  - 如果你手上有 OpenAI 的 admin key 或知道 Kimi 的用量接口，发我实测一次，验证通过我当天就能接上
 
 **节流（Step 2）**
 - [x] 2A 压缩潜力量化（规则引擎：陈旧输出/重复读取/超长输出 → 本月可省多少，实测 $63-95）
 - [x] 2B 压缩执行第一层：自动压缩提醒 + Claude autoCompact 写入 + RTK 安装（含 engine 的完整版；自动接 hook，改动 settings.json 前备份、失败还原）
 - [x] 异常重试自动熔断提醒（`breaker.ts`：单会话 ≥30 次调用即主动通知，每轮最多提 1 个防首跑轰炸）
-- [ ] 2B 压缩执行第二层：代理网关（LiteLLM/自研，视数据再定）
-- [ ] 低价模型路由（本地代理层，可选开启，默认不动你任何配置）
+- [⏸] 2B 压缩执行第二层：代理网关（LiteLLM / 自研）
+  - 卡点不是技术，是**边界**：本地代理会接管你所有 AI 工具的请求链路。要做就得先回答「失败怎么无感回退」「改了网络出问题怎么一键还原」「凭什么让用户信它不劫持 key」。这三条没有令人信服的答案之前不做——**宁可不做，也不能做一个会偷偷影响你网络的中间层**
+- [⏸] 低价模型路由（同上，是代理网关的一个子功能）
+  - 依赖上一条；另外自动路由会导致「同一段对话前后模型不一致」，对连贯性有损，需要先验证收益是否盖过代价
 
 **平台与工程**
 - [x] macOS 状态栏应用（arm64 + Intel x64 双架构 .app/.dmg）
 - [x] Windows 核查 + 分平台图标 + CI（`.msi` 由 Actions 产出）
 - [x] 自动更新（tauri-updater，v0.2.6 起生效，三平台共用一份 `latest.json`）
 - [x] CI 自动发布：打 tag 后三平台产物 + 合并版 `latest.json` 自动进 Release，并回写 brew cask
-- [ ] Windows `.msi` 实机安装验证（目前只验证到 Actions 产物层）
-- [ ] 统一二进制（universal2 单包替代 arm64/x64 两个 dmg）
-- [ ] 签名与公证（Apple Developer $99/年，有赞助再开）
+- [⏸] Windows `.msi` 实机安装验证
+  - 现状：CI 只验证到「产物成功生成 + 签名文件存在 + 文件大小合理」，**没有在真实 Windows 上装过、跑过、验证过自动更新**。开发环境是 macOS，手上没有 Windows 机器
+  - 需要：一台 Windows 10/11 机器。谁愿意帮忙实测，开 Discussion 说一声，我把验证步骤整理成清单发你
+- [⏸] 统一二进制（universal2 单包替代 arm64/x64 两个 dmg）
+  - 技术上可行：依赖全是纯 Rust（tauri / serde / open，没有 C 库），lipo 能合并
+  - 代价明确：两个架构的代码合并后，单包体积必然大于现在任一个 dmg（现在 arm64 是 5.4MB、x64 是 5.7MB）。**具体多大需实际构建后才能确认，这里是预估不是实测**
+  - 而且 `latest.json` 仍要按架构分发，等于要多维护一条合并流程
+  - 结论：只有在「用户分不清该下哪个」真的成为常见问题时才值得做。现在两个 dmg 名字里已经标了 aarch64 / x64，暂时不是瓶颈
+- [⏸] 签名与公证
+  - 阻塞原因：Apple Developer Program **$99/年**，目前项目没有收入来源
+  - 影响：未签名的 app 首次打开会被 Gatekeeper 拦一次，需要右键打开或跑一次 `xattr -dr com.apple.quarantine`（[快速开始](#-快速开始)里有写）。brew 安装的会自动处理
+  - 若将来有赞助覆盖这笔开销，优先做这个——它比任何新功能都更能降低新用户的第一次使用摩擦
 
 ## English
 
