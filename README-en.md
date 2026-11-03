@@ -164,24 +164,38 @@ A solo dev + a few AI agents running product experiments (remote, Xi'an). token-
 
 ## ✅ TODO
 
+Legend: `[x]` done · `[ ]` planned · `[⏸]` blocked on something outside the project (reason given)
+
 **Coverage**
-- [x] OpenCode adapter (SQLite) · Qoder (session counts) · pi · Cursor spike
-- [x] Cloud usage API: Doubao Volcano (arkcli, daily granularity)
-- [ ] Cloud usage APIs: OpenAI / Moonshot (user-provided API key)
+- [x] OpenCode adapter (SQLite) · Qoder (session counts only, model is "auto" — labelled honestly) · pi · Cursor spike (no token usage data → detection-only)
+- [x] Cloud usage API: Doubao Volcano (arkcli `usage stats`, daily granularity)
+- [⏸] Cloud usage APIs: OpenAI / Kimi
+  - Tested 2026-11: Kimi/Moonshot has **no public usage endpoint** — `/v1/users/me/balance` exists (401 auth), but `/v1/usage`, `/v1/users/me/usage`, `/api/v1/usage` are all 404. Balance yes, "how much did I spend today" no.
+  - OpenAI does have `/v1/organization/usage/*`, but those are organization-level endpoints requiring an Organization Admin key. **I don't have one, so I can't verify whether a personal key works.** Marked blocked rather than "easy TODO".
+  - Have an OpenAI admin key, or know Kimi's usage endpoint? Open a Discussion — I'll wire it up the same day it's verified.
 
 **Throttling (step 2)**
-- [x] 2A Compression potential measurement
-- [x] 2B layer 1: auto-compact alerts + Claude autoCompact + one-click RTK install
-- [ ] 2B layer 2: proxy gateway (LiteLLM/self-built)
-- [ ] 2B Compression execution (integrate Gobstopper-style proxy first)
-- [ ] Cheap-model routing (optional local proxy — never touches your config by default)
-- [ ] Proactive retry-loop breaker notifications
+- [x] 2A Compression potential measurement (rule engine, measured $63–95/month)
+- [x] 2B layer 1: auto-compact alerts + Claude autoCompact + RTK install (backs up `settings.json`, restores on failure)
+- [x] Retry-loop breaker notifications (≥30 calls in one session; max 1 alert per round so first run isn't flooded)
+- [⏸] 2B layer 2: proxy gateway (LiteLLM / self-built)
+  - The blocker is not engineering, it's **trust**: a local proxy takes over the request path of every AI tool you run. Before shipping it I'd need convincing answers to: how does it fail open, how do you undo it in one step, and why should anyone believe it won't touch their keys. **No middle layer that quietly rewrites your network traffic.**
+- [⏸] Cheap-model routing — a sub-feature of the gateway above, and it makes one conversation switch models mid-way, which hurts coherence.
 
 **Platform & engineering**
-- [x] macOS menubar app (arm64 .app/.dmg)
-- [x] Windows audit + platform icons + CI
-- [ ] Windows .msi on-device validation (Actions artifact)
-- [ ] Intel Mac build (universal2) · auto-update (tauri-updater) · signing & notarization
+- [x] macOS menubar app (arm64 + Intel x64)
+- [x] Windows audit + platform icons + CI (`.msi` built on Actions)
+- [x] Auto-update (tauri-updater, live since v0.2.6, all three platforms share one `latest.json`)
+- [x] CI release: tag → three-platform artifacts + merged `latest.json` + brew cask bump
+- [⏸] Windows `.msi` on-device validation
+  - CI only proves "the artifact was produced, has a signature, has a sane size". **Nobody has installed it on real Windows, launched it, or validated auto-update.** Dev machine is macOS, no Windows box available.
+  - Need: a Windows 10/11 machine. Offer to test in Discussions and I'll send a checklist.
+- [⏸] Universal2 single binary
+  - Technically fine (all-Rust dependencies, no C libs, lipo can merge). Cost: the merged binary is necessarily larger than either per-arch dmg (currently 5.4 MB arm64 / 5.7 MB x64) — **exact size needs an actual build, this is an estimate**. `latest.json` would still ship per-arch, so it adds a merge step for little gain.
+- [⏸] Code signing & notarization
+  - Blocked on Apple Developer Program (**$99/year**); the project has no revenue.
+  - Impact: unsigned apps get one Gatekeeper prompt on first launch (right-click open, or `xattr -dr com.apple.quarantine`). brew handles it automatically.
+  - If sponsorship ever covers it, this comes first — it removes more friction for new users than any new feature.
 
 ## License
 
