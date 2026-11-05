@@ -745,20 +745,16 @@ footer .notes{max-width:560px}
           <button class="addrow" type="button" data-add="models">+ 添加模型</button>
         </div>
         <div class="m-sec">
-          <div class="m-lab">云端用量 API <span>手工登记的固定月费，与下面「订阅登记」性质相同</span></div>
-          <div class="key-empty-note">
-            这里只加「固定月费」，不参与按 token 计费。<b>火山方舟的用量已自动采集</b>，若只是为了标记已接入，金额填 0 即可，避免重复计费。
-          </div>
-          <div id="mCloud" data-set="cloud"></div>
-          <button class="addrow" type="button" data-add="cloud">+ 添加 API</button>
-        </div>
-        <div class="m-sec">
           <div class="m-lab">订阅登记 <span>固定月费；接口或 CC Switch 能查到的不需要手填</span></div>
           <div class="key-empty-note">
             标「接口自动识别」或「CC Switch 读取」的行已自动计入，<b>不要再手填一遍</b>。接口能查到套餐价格的平台会自动出现在这里。
           </div>
           <div id="mSubs" data-set="subs"></div>
-          <button class="addrow" type="button" data-add="subs">+ 添加订阅</button>
+          <div class="key-actions">
+            <button class="addrow" type="button" id="mAddSubPlatform">+ 添加订阅平台</button>
+            <button class="addrow" type="button" data-add="subs">+ 手动填一条</button>
+          </div>
+          <div id="mSubResult" class="key-result"></div>
         </div>
         <div class="m-sec">
           <div class="m-lab">月度预算（¥）</div>
@@ -1103,10 +1099,9 @@ try{var th=localStorage.getItem("tp-theme");if(th)setTheme(th)}catch(e){}
 var modal=$("#settingsModal"),settings=null,settingsOrig=null,overrideNames=[];
 function loadSettingsFromD(){
   overrideNames=((D&&D.settings&&D.settings.overrideNames)||[]);
-  var s=(D&&D.settings)||{models:[],cloudApis:[],subscriptions:[],monthlyBudgetCny:null};
+  var s=(D&&D.settings)||{models:[],subscriptions:[],monthlyBudgetCny:null};
   settings={
     models:(s.models||[]).map(function(m){return {n:String(m.name),i:String(m.inputCny),o:String(m.outputCny),c:String(m.cacheReadCny)}}),
-    cloud:(s.cloudApis||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny)}}),
     // origin: 'api' / 'ccswitch' 都算自动来的，不允许手改（改了就重复计费）
     subs:(s.subscriptions||[]).map(function(m){
       return {n:String(m.name),p:String(m.monthlyCny),origin:m.origin||'manual'};
@@ -1271,6 +1266,95 @@ function addCustomEndpoint(){
   });
 }
 
+/* 添加订阅平台：选平台 → 填 key → 自动查套餐费用。
+   与「API Key 余额查询」同一套交互，只是限定订阅场景。
+   查到套餐名和月费就自动填进订阅登记；查不到价格就让用户手填金额，
+   不猜。 */
+function showAddSubPlatform(){
+  if(!settings)return;
+  var box=$("#mSubResult");
+  if(!box)return;
+  // 只列「已实现」的订阅平台：未验证的接口调用必然失败，
+  // 把它们放进下拉框等于给用户一个必然报错的选项。
+  var avail=settings.keys.filter(function(k){
+    return k.scenario==='subscription' && k.implemented && !k.added && !k.masked;
+  });
+  if(!avail.length){
+    var pending=settings.keys.filter(function(k){
+      return k.scenario==='subscription' && !k.implemented;
+    });
+    box.innerHTML='<div class="kr-line"><span class="kr-ok">暂无可自动查询的订阅平台</span></div>'+
+      (pending.length
+        ? '<div class="kr-line" style="color:var(--muted)">'+
+          esc(pending.map(function(k){return k.displayName}).join('、'))+
+          ' 的订阅接口尚未实测验证，验证通过后会自动出现在这里</div>'
+        : '')+
+      '<div class="kr-line" style="color:var(--muted)">现在可以点「手动填一条」登记固定月费</div>';
+    return;
+  }
+  box.innerHTML =
+    '<div class="key-custom">'+
+      '<select id="spPick" aria-label="选择订阅平台" style="grid-column:1/-1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px;color:var(--fg)">'+
+        avail.map(function(k){
+          return '<option value="'+esc(k.id+'|'+k.scenario)+'">'+esc(k.displayName)+(k.needsAdmin?'（需 admin key）':'')+'</option>';
+        }).join('')+
+      '</select>'+
+      '<input id="spKey" type="password" placeholder="粘贴该平台的 API Key" aria-label="订阅平台 API Key" style="grid-column:1/-1" autocomplete="off" spellcheck="false">'+
+    '</div>'+
+    '<div class="key-actions">'+
+      '<button class="addrow" type="button" id="spOk">查询套餐</button>'+
+      '<button class="addrow" type="button" id="spCancel">取消</button>'+
+    '</div>'+
+    '<div id="spHint" class="kr-line" style="color:var(--muted)">填 key 后点「查询套餐」，自动读出套餐名和月费填进订阅登记</div>';
+  $("#spCancel").addEventListener("click",function(){box.innerHTML="";});
+  $("#spOk").addEventListener("click",async function(){
+    var v=$("#spPick").value||"";
+    var parts=v.split("|");
+    var id=parts[0], sc=parts[1];
+    var key=($("#spKey").value||"").trim();
+    var hint=$("#spHint");
+    if(!key)return (hint.innerHTML='<span class="kr-bad">请先粘贴 API Key</span>');
+    hint.innerHTML='<span style="color:var(--muted)">查询中…</span>';
+    try{
+      var payload=JSON.stringify({keys:(function(){var o={};o[id+':'+sc]=key;return o})(),customs:[]});
+      var d;
+      if(inTauri()){
+        var raw=await window.__TAURI__.core.invoke("quota_test",{payload:payload});
+        d=JSON.parse(raw);
+      }else{
+        var r=await fetch("/api/quota/test",{method:"POST",headers:{"Content-Type":"application/json"},body:payload});
+        d=await r.json();
+      }
+      var res=(d.results||[]).filter(function(x){return x.id===id&&x.scenario===sc})[0];
+      if(!res){
+        hint.innerHTML='<span class="kr-bad">没有返回该平台的结果</span>';return;
+      }
+      if(!res.ok){
+        hint.innerHTML='<span class="kr-bad">✗ '+esc(res.displayName)+'</span><span>'+esc(res.error||"查询失败")+'</span>';
+        return;
+      }
+      // 查到套餐名和价格 → 自动加进订阅列表
+      if(res.planName&&res.monthlyCny!=null){
+        settings.subs.push({n:res.planName,p:String(res.monthlyCny),origin:'api'});
+        renderSet();
+        hint.innerHTML='<span class="kr-ok">已自动填入 '+esc(res.planName)+' ¥'+res.monthlyCny+'</span>';
+      }else if(res.planName){
+        // 有套餐名但没价格：让用户补金额
+        settings.subs.push({n:res.planName,p:'',origin:'manual'});
+        renderSet();
+        hint.innerHTML='<span class="kr-ok">已填入套餐 '+esc(res.planName)+'</span><span style="color:var(--warn)">该接口不返回价格，请手填月费</span>';
+      }else{
+        hint.innerHTML='<span class="kr-bad">接口没返回套餐信息</span><span>该平台可能不支持订阅查询，可用「手动填一条」</span>';
+      }
+      // 同一把 key 也存进 key 列表，避免用户在两处分别填
+      var target=settings.keys.filter(function(k){return k.id===id&&k.scenario===sc})[0];
+      if(target){target.added=true;target.value=key;}
+    }catch(e){
+      hint.innerHTML='<span class="kr-bad">查询失败：'+esc(e&&e.message?e.message:String(e))+'</span>';
+    }
+  });
+}
+
 /* 测试连接：只测有 key 的（新填的或已存的） */
 async function testKeys(){
   var box=$("#mKeyResult");
@@ -1318,7 +1402,6 @@ function collectKeys(){
 
 function renderSet(){
   $("#mModels").innerHTML=settings.models.map(function(r,i){return '<div class="m-row r4"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="模型名" placeholder="模型名，如 glm-5.3"><input data-k="i" data-i="'+i+'" value="'+esc(r.i)+'" aria-label="输入单价"><input data-k="o" data-i="'+i+'" value="'+esc(r.o)+'" aria-label="输出单价"><input data-k="c" data-i="'+i+'" value="'+esc(r.c)+'" aria-label="缓存读单价"><button class="delrow" type="button" data-del="models" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
-  $("#mCloud").innerHTML=settings.cloud.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费用"><button class="delrow" type="button" data-del="cloud" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   var ORIGIN_TAG={api:'接口自动识别',ccswitch:'CC Switch 读取',manual:''};
   var ORIGIN_TIP={api:'来自平台接口，已计入当月固定费用；手填会重复计费，故不可编辑',
                   ccswitch:'来自本机 CC Switch 配置，自动读取；如需修改请到 CC Switch 里改'};
@@ -1385,6 +1468,7 @@ modal.addEventListener("click",function(e){
 });
 $("#mAddCustom").addEventListener("click",showAddPlatform);
 $("#mTestKeys").addEventListener("click",testKeys);
+$("#mAddSubPlatform").addEventListener("click",showAddSubPlatform);
 $$(".addrow").forEach(function(b){
   // 只处理带 data-add 的行内「+ 添加」按钮。
   // 没有这层判断的话，同样用 .addrow 样式的「添加自定义平台」「测试连接」
@@ -1399,7 +1483,7 @@ $$(".addrow").forEach(function(b){
   });
 });
 $("#settingsSave").addEventListener("click",function(){
-  var payload={priceOverrides:{},cloudApis:[],subscriptions:[],monthlyBudgetCny:null,autoCompact:settings.autoCompact||{enabled:false}};payload.autoCompact.thresholdTokens=payload.autoCompact.thresholdTokens||100000;
+  var payload={priceOverrides:{},subscriptions:[],monthlyBudgetCny:null,autoCompact:settings.autoCompact||{enabled:false}};payload.autoCompact.thresholdTokens=payload.autoCompact.thresholdTokens||100000;
   settings.models.forEach(function(r){
     if(!r.n)return;
     var orig=(settingsOrig||[]).find(function(x){return x.n===r.n});
@@ -1407,7 +1491,6 @@ $("#settingsSave").addEventListener("click",function(){
     var wasOverride=overrideNames.indexOf(r.n)>-1;
     if(changed||wasOverride)payload.priceOverrides[r.n]={input:parseFloat(r.i)||0,output:parseFloat(r.o)||0,cacheRead:parseFloat(r.c)||0};
   });
-  settings.cloud.forEach(function(r){if(r.n)payload.cloudApis.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
   // 自动识别的条目由接口提供，不写回手填列表——写回去下次就会被当成手填项，
   // 再叠加接口识别就重复了
   settings.subs.forEach(function(r){
@@ -1818,7 +1901,7 @@ function emptyData(){
     mix:{today:{model:[],tool:[],proj:[]},week:{model:[],tool:[],proj:[]},month:{model:[],tool:[],proj:[]}},
     tokTrend:{days:days,top:{model:"",tool:"",proj:""}},
     modelRank:[],hostRank:[],savings:[],compression:null,adapters:[],
-    settings:{models:[],cloudApis:[],subscriptions:[],monthlyBudgetCny:null,usdToCny:7.2}
+    settings:{models:[],subscriptions:[],monthlyBudgetCny:null,usdToCny:7.2}
   };
 }
 function renderAll(d){

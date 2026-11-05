@@ -301,8 +301,10 @@ export async function buildDashboardData(
 
   // ---------- 预算 ----------
   const budgetCny = monthlyBudgetCny(cfg);
-  const fixedFeesCny = (cfg.cloudApis ?? []).reduce((s, x) => s + (x.monthlyCny || 0), 0)
-    + (cfg.subscriptions ?? []).reduce((s, x) => s + (x.monthlyCny || 0), 0);
+  // 固定费只来自订阅登记一处。原先还有个「云端用量 API」区块，
+  // 它和订阅登记性质完全相同（都是往固定费里加一笔），却要用户
+  // 在两处分别维护同一类东西，已合并删除。
+  const fixedFeesCny = (cfg.subscriptions ?? []).reduce((s, x) => s + (x.monthlyCny || 0), 0);
   const dim = daysInMonth(now);
   const dayOfMonth = now.getDate();
   let budget: DashboardData['budget'] = null;
@@ -978,7 +980,6 @@ async function buildSettings(
     rtkDetail: rtkSt.detail,
     models,
     overrideNames: Object.keys(cfg.priceOverrides ?? {}),
-    cloudApis: cfg.cloudApis ?? [],
     subscriptions: buildSubscriptions(cfg, quota),
     quotaKeys: buildKeyStatus(cfg),
     monthlyBudgetCny: monthlyBudgetCny(cfg) ?? null,

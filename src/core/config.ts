@@ -21,7 +21,6 @@ export interface TokenPilotConfig {
   usdToCny?: number;            // 汇率（默认 7.2）
   alertOnPercent?: number;      // 超过预算百分之多少就告警（默认 80）
   priceOverrides?: Record<string, PriceOverrideCny>;  // 设置弹窗的模型单价覆写（¥/M）
-  cloudApis?: FixedFee[];       // 云端用量 API 固定月费
   subscriptions?: FixedFee[];   // 桌面端/会员订阅月费
   autoCompact?: {
     enabled: boolean;            // 自动压缩总开关（默认关）
