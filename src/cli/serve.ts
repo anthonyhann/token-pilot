@@ -125,6 +125,52 @@ export async function serve(port = 17895): Promise<void> {
         res.end(JSON.stringify(state.data ?? {}));
         return;
       }
+      // 测试连接：用「本次输入的 key」直接打一次接口。
+      // 必须先于保存就能测——否则用户得先存一个可能错的 key 才能验证。
+      if (url === '/api/quota/test' && req.method === 'POST') {
+        const body = await readBody(req);
+        const { keys } = JSON.parse(body || '{}') as { keys?: Record<string, string> };
+        const { verifiedSpecs } = await import('../core/quota/providers/catalog.js');
+        const { fetchDeclarativeBalance, loadCustomEndpoints } = await import(
+          '../core/quota/providers/declarative.js'
+        );
+
+        // 自定义端点也转成同样形状的 spec，复用同一套请求/解析
+        const customs = (await loadCustomEndpoints()).map((c) => ({
+          id: c.id,
+          displayName: c.displayName,
+          endpoint: c.endpoint,
+          auth: c.auth,
+          amount: { path: c.amountPath, kind: 'balance' as const },
+          currency: c.currency ?? ('CNY' as const),
+          keyUrl: '',
+          verified: 'custom',
+        }));
+
+        const specs = [...verifiedSpecs(), ...customs];
+        const results = await Promise.all(
+          specs.map(async (spec) => {
+            const override = keys?.[spec.id]?.trim();
+            const probe = await fetchDeclarativeBalance(spec, override || undefined);
+            return {
+              id: spec.id,
+              displayName: spec.displayName,
+              ok: probe.ok,
+              detail:
+                probe.ok && probe.balance
+                  ? `${probe.balance.currency === 'CNY' ? '¥' : '$'}${probe.balance.amount.toFixed(2)}`
+                  : undefined,
+              error: probe.ok ? undefined : probe.error,
+            };
+          }),
+        );
+        res.writeHead(200, {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store',
+        });
+        res.end(JSON.stringify({ results }));
+        return;
+      }
       if (url === '/api/config' && req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(loadConfig()));
@@ -132,9 +178,24 @@ export async function serve(port = 17895): Promise<void> {
       }
       if (url === '/api/config' && req.method === 'POST') {
         const body = await readBody(req);
-        const patch = JSON.parse(body) as Partial<TokenPilotConfig>;
+        const patch = JSON.parse(body) as Partial<TokenPilotConfig> & {
+          customEndpoints?: unknown;
+        };
+        // 自定义端点单独存文件：它们是端点定义，不是「配置开关」，
+        // 混在 config.json 里以后做迁移会互相牵连。
+        if (Array.isArray(patch.customEndpoints)) {
+          const { saveCustomEndpoints } = await import('../core/quota/providers/declarative.js');
+          try {
+            await saveCustomEndpoints(
+              patch.customEndpoints as Parameters<typeof saveCustomEndpoints>[0],
+            );
+          } catch {
+            // 写失败不该拖垮整个设置保存，用户其它的改动仍然生效
+          }
+        }
         const cur = loadConfig();
-        const next: TokenPilotConfig = { ...cur, ...patch };
+        const { customEndpoints: _ignored, ...rest } = patch;
+        const next: TokenPilotConfig = { ...cur, ...rest };
         // 用户明示后，写 Claude Code 的 autoCompactEnabled
         if (next.autoCompact?.applyClaudeCode) {
           const r = applyClaudeAutoCompact(next.autoCompact.enabled);

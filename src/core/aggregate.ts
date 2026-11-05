@@ -12,6 +12,7 @@ import { detectRetryLoops } from './retry-detector.js';
 import { savingsAdvice } from './savings.js';
 import { computeCompression } from './compression.js';
 import { buildAdapterTiers, HOST_TIERS } from './registry.js';
+import { BALANCE_CATALOG } from './quota/providers/catalog.js';
 import { APP_VERSION } from './version.js';
 
 /**
@@ -829,6 +830,45 @@ function buildSavings(
 }
 
 // ---------- 设置 ----------
+/**
+ * 汇总各平台 API Key 的配置状态，**只暴露掩码**。
+ *
+ * 为什么必须掩码而不是明文：settings 会随 DashboardData 走到前端、
+ * 也会写进 dashboard-data.json 落盘。明文 key 一旦进这条链路，
+ * 就等于把密钥摊在了一个「看起来只是账单数据」的文件里。
+ * 前端只需要知道「配没配、是哪一把」，用不着明文。
+ */
+function buildKeyStatus(cfg: TokenPilotConfig): SettingsData['quotaKeys'] {
+  const stored = cfg.quotaKeys ?? {};
+  const shown = new Set<string>();
+  const rows: SettingsData['quotaKeys'] = [];
+
+  const mask = (k?: string): string | null => {
+    if (!k || !k.trim()) return null;
+    const t = k.trim();
+    // 太短的 key 全遮，防止「后 4 位就是全部」
+    return t.length <= 8 ? '••••' : `••••${t.slice(-4)}`;
+  };
+
+  // 内置平台：即使没配 key 也列出，给用户「去哪申请」的入口
+  for (const spec of BALANCE_CATALOG) {
+    shown.add(spec.id);
+    rows.push({
+      id: spec.id,
+      displayName: spec.displayName,
+      masked: mask(stored[spec.id]),
+      keyUrl: spec.keyUrl || undefined,
+    });
+  }
+
+  // 用户自己配过但不在内置目录里的（自定义端点等）也要显示，否则用户存了看不见
+  for (const [id, key] of Object.entries(stored)) {
+    if (shown.has(id)) continue;
+    rows.push({ id, displayName: id, masked: mask(key) });
+  }
+  return rows;
+}
+
 async function buildSettings(
   events: UsageEvent[],
   cfg: TokenPilotConfig,
@@ -880,6 +920,7 @@ async function buildSettings(
     overrideNames: Object.keys(cfg.priceOverrides ?? {}),
     cloudApis: cfg.cloudApis ?? [],
     subscriptions: cfg.subscriptions ?? [],
+    quotaKeys: buildKeyStatus(cfg),
     monthlyBudgetCny: monthlyBudgetCny(cfg) ?? null,
     usdToCny: fx,
   };

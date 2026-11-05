@@ -52,7 +52,13 @@ except Exception as e:
   }
 }
 
-/** DeepSeek：现金余额 */
+/**
+ * DeepSeek：现金余额
+ *
+ * @deprecated 已迁到声明式 provider（catalog.ts 的 deepseek 条目 +
+ * declarative.ts 的引擎）。保留此函数只为兼容旧调用与做对照测试，
+ * 新平台请往 catalog 里加，不要再写专用函数。
+ */
 export async function fetchDeepseekBalance(): Promise<ProviderQuota> {
   const base: ProviderQuota = {
     id: 'deepseek',

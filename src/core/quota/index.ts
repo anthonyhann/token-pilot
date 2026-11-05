@@ -12,7 +12,8 @@ import { CONFIG_DIR } from '../config.js';
 import type { ProviderQuota, QuotaSnapshot } from './types.js';
 import { fetchVolcQuota } from './providers/volc.js';
 import { fetchOpencodeQuota } from './providers/opencode.js';
-import { fetchDeepseekBalance, fetchGlmQuota, fetchMinimaxTokenPlan } from './providers/balance.js';
+import { fetchGlmQuota, fetchMinimaxTokenPlan } from './providers/balance.js';
+import { fetchAllDeclarative } from './providers/declarative.js';
 
 const CACHE_PATH = path.join(CONFIG_DIR, 'quota-cache.json');
 const TTL_MS = 5 * 60_000;
@@ -23,11 +24,14 @@ export async function collectQuota(force = false): Promise<QuotaSnapshot> {
     if (cached) return { ...cached, cached: true };
   }
 
-  // 目前只有火山有 provider；后续平台在这里追加
+  // 两类 provider：
+  //   1. 声明式余额（catalog + 用户自定义端点）——加平台只改数据
+  //   2. 有专有协议的平台（火山 subprocess / OpenCode / GLM 额度窗口 / MiniMax Token Plan）
+  // 注意 DeepSeek 已迁到声明式，这里不再单独调用，避免重复请求同一接口。
+  const declarative = fetchAllDeclarative();
   const tasks: Promise<ProviderQuota>[] = [
     fetchVolcQuota(),
     fetchOpencodeQuota(),
-    fetchDeepseekBalance(),
     fetchGlmQuota(),
     fetchMinimaxTokenPlan(),
   ];
@@ -47,7 +51,17 @@ export async function collectQuota(force = false): Promise<QuotaSnapshot> {
         },
   );
 
-  const snap: QuotaSnapshot = { generatedAt: Date.now(), providers };
+  // 声明式结果整体并入（它们内部已用 allSettled，不会抛）
+  let declProviders: ProviderQuota[] = [];
+  try {
+    declProviders = await declarative;
+  } catch {
+    declProviders = [];
+  }
+  const snap: QuotaSnapshot = {
+    generatedAt: Date.now(),
+    providers: [...providers, ...declProviders],
+  };
   writeCache(snap);
   return snap;
 }

@@ -361,6 +361,23 @@ footer .notes{max-width:560px}
 .m-headr{color:var(--muted);font-size:10.5px;font-weight:700}
 .addrow{color:var(--info);font-weight:700;font-size:12px;padding:4px 0}
 
+/* API Key 区块 */
+.key-empty-note{font-size:11px;color:var(--muted);background:color-mix(in oklab,var(--info) 8%,transparent);
+  border:1px solid color-mix(in oklab,var(--info) 22%,var(--border));border-radius:8px;padding:7px 9px;margin-bottom:9px;line-height:1.5}
+.key-row{display:grid;grid-template-columns:110px 1fr auto;gap:6px;align-items:center;margin-bottom:6px}
+.key-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.key-row input{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px;color:var(--fg);width:100%;font-family:ui-monospace,monospace}
+.key-row input:focus-visible{outline:2px solid var(--info);outline-offset:1px}
+.key-del{color:var(--muted);font-size:14px;line-height:1;padding:2px 6px;border-radius:6px}
+.key-del:hover{color:var(--warn);background:color-mix(in oklab,var(--warn) 12%,transparent)}
+.key-custom{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 8px}
+.key-custom input{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px;color:var(--fg)}
+.key-actions{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.key-result{margin-top:8px;font-size:11.5px;line-height:1.7}
+.key-result .kr-ok{color:var(--pos-text);font-weight:700}
+.key-result .kr-bad{color:var(--warn);font-weight:700}
+.key-result .kr-line{display:flex;gap:6px}
+
 /* 设置项：复选框 + 标题 + 说明的三层结构 */
 .opt{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;margin:2px 0;border:1px solid transparent;border-radius:9px;cursor:pointer;transition:background .14s var(--ease),border-color .14s var(--ease)}
 .opt:hover{background:color-mix(in oklab,var(--fg) 4%,transparent);border-color:var(--border)}
@@ -696,6 +713,18 @@ footer .notes{max-width:560px}
     <div class="modal-card">
       <div class="modal-head"><h2>数据设置</h2><button class="theme-btn" id="modalClose" type="button" aria-label="关闭设置"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div class="modal-body">
+        <div class="m-sec">
+          <div class="m-lab">API Key 余额查询 <span>填了就能在看板看到余额；只存本机，不上传</span></div>
+          <div class="key-empty-note">
+            没填也能用：装了 CC Switch 会自动读取。<b>不装 CC Switch 时，这里是唯一入口。</b>
+          </div>
+          <div id="mKeys"></div>
+          <div class="key-actions">
+            <button class="addrow" type="button" id="mAddCustom">+ 添加自定义平台</button>
+            <button class="addrow" type="button" id="mTestKeys">测试连接</button>
+          </div>
+          <div id="mKeyResult" class="key-result"></div>
+        </div>
         <div class="m-sec">
           <div class="m-lab">本地模型单价 <span>¥ / 百万 tokens · 公开目录价估算，可直接修正</span></div>
           <div class="m-row r4 m-headr"><span>模型</span><span>输入</span><span>输出</span><span>缓存读</span><span></span></div>
@@ -1061,13 +1090,96 @@ function loadSettingsFromD(){
     cloud:(s.cloudApis||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny)}}),
     subs:(s.subscriptions||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny)}}),
     budget:s.monthlyBudgetCny==null?"":String(s.monthlyBudgetCny),
-    autoCompact:(s.autoCompact)||{enabled:false}
+    autoCompact:(s.autoCompact)||{enabled:false},
+    // 每条：{id, displayName, masked, keyUrl, value}
+    // value 是用户本次输入的新 key（空串=不改）；masked 是已存 key 的掩码
+    keys:(s.quotaKeys||[]).map(function(k){
+      return {id:k.id,displayName:k.displayName,masked:k.masked,keyUrl:k.keyUrl||"",value:""};
+    })
   };
 }
+/* ---------- API Key 区块 ----------
+   安全约束（写死在这里，改代码时别绕过）：
+   1. 已存的 key 只以掩码形式下发，页面永远拿不到明文
+   2. 输入框里是「待写入的新 key」，留空表示不修改
+   3. 清空 = 删除该平台的 key（不是写入空串）
+   4. 提交时只发 value 非空的条目，不把已有 key 回传一遍 */
+function renderKeyRows(){
+  var box=$("#mKeys");
+  if(!box||!settings)return;
+  if(!settings.keys.length){
+    box.innerHTML='<div class="key-empty-note">还没有可查询的平台。点下面「添加自定义平台」可以接入任意提供余额接口的服务。</div>';
+    return;
+  }
+  box.innerHTML=settings.keys.map(function(k,i){
+    var ph = k.masked ? ("已配置 "+k.masked+"，留空不修改") : "粘贴 API Key";
+    var link = k.keyUrl ? '<a href="'+esc(k.keyUrl)+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--info);margin-left:6px">去申请</a>' : "";
+    return '<div class="key-row">'+
+      '<span class="key-name" title="'+esc(k.id)+'">'+esc(k.displayName)+'</span>'+
+      '<input type="password" data-key="'+i+'" value="" placeholder="'+esc(ph)+'" aria-label="'+esc(k.displayName)+' 的 API Key" autocomplete="off" spellcheck="false">'+
+      '<span>'+link+(k.masked?'<button class="key-del" type="button" data-keyclear="'+i+'" aria-label="清除 '+esc(k.displayName)+' 的 key" title="清除已保存的 key">×</button>':'')+'</span>'+
+    '</div>';
+  }).join("");
+}
+
+/* 自定义平台：id 由名称生成，重复则拒绝 */
+function addCustomEndpoint(){
+  if(!settings)return;
+  var name=prompt("平台名称（如「某某云」）");
+  if(!name||!name.trim())return;
+  name=name.trim();
+  var id=name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  if(!id){alert("名称里至少要有英文字母或数字，用来做标识");return;}
+  if(settings.keys.some(function(k){return k.id===id})){
+    alert("已经有同名平台了（"+id+"）");return;
+  }
+  var endpoint=prompt("余额接口地址（https:// 开头）");
+  if(!endpoint||!/^https:\/\//.test(endpoint.trim())){alert("需要 https:// 开头的完整地址");return;}
+  var path=prompt("金额字段路径（如 data.balance，支持数组下标 a.b[0].c）");
+  if(!path||!path.trim())return;
+  var auth=prompt("鉴权方式：bearer（默认）/ raw / x-api-key","bearer");
+  auth=(auth||"bearer").trim();
+  if(["bearer","raw","x-api-key"].indexOf(auth)<0){alert("只能是 bearer / raw / x-api-key");return;}
+  // 暂存到 settings.keys 等待用户填 key，同时记录端点信息供保存
+  settings.keys.push({id:id,displayName:name,masked:null,keyUrl:"",value:"",_custom:{id:id,displayName:name,endpoint:endpoint.trim(),auth:auth,amountPath:path.trim()}});
+  renderKeyRows();
+  $("#mKeyResult").innerHTML='<div class="kr-line"><span class="kr-ok">已添加 '+esc(name)+'</span><span>填入 key 后点「测试连接」</span></div>';
+}
+
+/* 测试连接：只测有 key 的（新填的或已存的） */
+async function testKeys(){
+  var box=$("#mKeyResult");
+  if(!box)return;
+  box.innerHTML='<span style="color:var(--muted)">测试中…</span>';
+  try{
+    var r=await fetch("/api/quota/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({keys:collectKeys()})});
+    var d=await r.json();
+    if(!d||!d.results){box.innerHTML='<span class="kr-bad">测试失败：接口无响应</span>';return;}
+    box.innerHTML=d.results.map(function(x){
+      return '<div class="kr-line"><span class="'+(x.ok?"kr-ok":"kr-bad")+'">'+(x.ok?"✓":"✗")+' '+esc(x.displayName)+'</span><span>'+
+        (x.ok? esc(x.detail) : esc(x.error||"失败")) +'</span></div>';
+    }).join("");
+  }catch(e){
+    box.innerHTML='<span class="kr-bad">测试失败：'+(e&&e.message?esc(e.message):"网络错误")+'</span><span style="color:var(--muted)">（需要本地 serve 在跑，桌面端点「打开看板」自带）</span>';
+  }
+}
+
+/* 收集要保存的 key：只收 value 非空的，外加自定义端点定义 */
+function collectKeys(){
+  if(!settings)return {keys:{}, customs:[]};
+  var keys={}, customs=[];
+  settings.keys.forEach(function(k){
+    if(k.value&&k.value.trim())keys[k.id]=k.value.trim();
+    if(k._custom)customs.push(k._custom);
+  });
+  return {keys:keys, customs:customs};
+}
+
 function renderSet(){
   $("#mModels").innerHTML=settings.models.map(function(r,i){return '<div class="m-row r4"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="模型名" placeholder="模型名，如 glm-5.3"><input data-k="i" data-i="'+i+'" value="'+esc(r.i)+'" aria-label="输入单价"><input data-k="o" data-i="'+i+'" value="'+esc(r.o)+'" aria-label="输出单价"><input data-k="c" data-i="'+i+'" value="'+esc(r.c)+'" aria-label="缓存读单价"><button class="delrow" type="button" data-del="models" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mCloud").innerHTML=settings.cloud.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费用"><button class="delrow" type="button" data-del="cloud" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mSubs").innerHTML=settings.subs.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
+  renderKeyRows();
   $("#mBudget").value=settings.budget;
   $("#mAutoCompact").checked=!!(settings.autoCompact&&settings.autoCompact.enabled);
   $("#mCompactK").value=String(Math.round((settings.autoCompact&&settings.autoCompact.thresholdTokens)||100000/1000)||100);
@@ -1095,14 +1207,27 @@ modal.addEventListener("input",function(e){
   if(t.id==="mCompactK"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.thresholdTokens=(parseInt(t.value)||0)*1000;return}
   if(t.id==="mApplyCc"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.applyClaudeCode=t.checked;return}
   if(t.id==="mInstallRtk"){settings.autoCompact=settings.autoCompact||{};settings.autoCompact.installRtk=t.checked;return}
+  if(t.dataset.key!==undefined){settings.keys[+t.dataset.key].value=t.value;return}
   var sec=t.closest("[data-set]");
   if(!sec||!t.dataset.k)return;
   settings[sec.dataset.set][+t.dataset.i][t.dataset.k]=t.value;
 });
 modal.addEventListener("click",function(e){
+  var clr=e.target.closest("[data-keyclear]");
+  if(clr){
+    var i=+clr.dataset.keyclear;
+    // 清空已存 key：标记为待删除，保存时写入空值
+    settings.keys[i].masked=null;
+    settings.keys[i].value="";
+    settings.keys[i]._clear=true;
+    renderKeyRows();
+    return;
+  }
   var d=e.target.closest("[data-del]");
   if(d){settings[d.dataset.del].splice(+d.dataset.i,1);renderSet()}
 });
+$("#mAddCustom").addEventListener("click",addCustomEndpoint);
+$("#mTestKeys").addEventListener("click",testKeys);
 $$(".addrow").forEach(function(b){
   b.addEventListener("click",function(){
     var k=b.dataset.add;
@@ -1123,6 +1248,17 @@ $("#settingsSave").addEventListener("click",function(){
   settings.subs.forEach(function(r){if(r.n)payload.subscriptions.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
   var b=parseFloat(settings.budget);
   payload.monthlyBudgetCny=isFinite(b)?b:null;
+  // API Key：只发本次新填的 + 明确要清除的，不把已有 key 回传
+  var qk={};
+  settings.keys.forEach(function(k){
+    if(k._clear)qk[k.id]="";
+    else if(k.value&&k.value.trim())qk[k.id]=k.value.trim();
+  });
+  if(Object.keys(qk).length)payload.quotaKeys=qk;
+  // 自定义端点定义（写入独立文件 custom-endpoints.json，不混在 config 里）
+  var customs=[];
+  settings.keys.forEach(function(k){if(k._custom)customs.push(k._custom)});
+  if(customs.length)payload.customEndpoints=customs;
   var h=$("#saveHint");
   function showHint(msg){
     h.textContent=msg;h.classList.add("on");
