@@ -15,17 +15,22 @@ import { explainQuotaError } from '../errors.js';
 import { resolveKey } from '../credentials.js';
 import type { ProviderQuota } from '../types.js';
 import {
-  BALANCE_CATALOG,
-  extractBalance,
+  API_CATALOG,
+  extractAmount,
   verifiedSpecs,
+  keySlot,
   type AuthStyle,
+  type ApiSpec,
   type BalanceApiSpec,
+  type QuotaScenario,
 } from './catalog.js';
 
 /** 用户自定义平台：只允许字段并集，避免任意对象混进来 */
 export interface CustomEndpoint {
   id: string;
   displayName: string;
+  /** 这条自定义端点属于余额场景还是订阅场景 */
+  scenario?: QuotaScenario;
   endpoint: string;
   auth: AuthStyle;
   /** 金额字段路径 */
@@ -76,12 +81,13 @@ function customToSpec(c: CustomEndpoint): BalanceApiSpec {
   return {
     id: c.id,
     displayName: c.displayName,
+    scenario: c.scenario ?? 'balance',
     endpoint: c.endpoint,
     auth: c.auth,
     amount: { path: c.amountPath, kind: 'balance' },
     currency: c.currency,
     keyUrl: '',
-    verified: 'custom', // 自定义条目不参与「未验证不启用」的过滤，用户自己负责
+    verified: 'custom', // 自定义条目不参与「未验证不启用」过滤，用户自己负责
     note: '自定义端点',
   };
 }
@@ -172,7 +178,7 @@ export async function fetchDeclarativeBalance(
 
   const cred = overrideKey
     ? { key: overrideKey, origin: 'config' as const, detail: '本次输入的 key' }
-    : await resolveKey(spec.id);
+    : await resolveKey(spec.id, undefined, spec.scenario);
   if (!cred) {
     return {
       ...base,
@@ -185,7 +191,7 @@ export async function fetchDeclarativeBalance(
     return { ...base, error: res.error ?? '请求失败' };
   }
 
-  const balance = extractBalance(spec, res.data);
+  const balance = extractAmount(spec, res.data);
   if (!balance) {
     // 拿到了响应但解析不出钱数：常见于 key 有效但账户没开通、
     // 或平台改了字段名。把原始响应截一段带上，便于排查，但不猜数字。
@@ -239,7 +245,9 @@ export async function testEndpoints(
 
   return Promise.all(
     specs.map(async (spec) => {
-      const override = overrideKeys[spec.id]?.trim();
+      // 界面传上来的键是 `平台:场景`，兼容旧的无场景写法
+      const override =
+        overrideKeys[keySlot(spec.id, spec.scenario)]?.trim() ?? overrideKeys[spec.id]?.trim();
       const probe = await fetchDeclarativeBalance(spec, override || undefined).catch((e) => ({
         ok: false,
         error: String(e).slice(0, 150),
@@ -280,5 +288,5 @@ export async function fetchAllDeclarative(): Promise<ProviderQuota[]> {
 
 /** 给 doctor 用：列出还没验证、因此未启用的平台 */
 export function unverifiedSpecs(): BalanceApiSpec[] {
-  return BALANCE_CATALOG.filter((s) => s.verified === null);
+  return API_CATALOG.filter((s) => s.verified === null);
 }

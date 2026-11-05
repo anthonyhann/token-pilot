@@ -143,7 +143,20 @@ export interface SettingsData {
    * 前端需要的只是「有没有配 / 配的是哪一把」，完整 key 只在本机
    * config.json 里，任何情况下都不经过数据契约。
    */
-  quotaKeys: { id: string; displayName: string; masked: string | null; keyUrl?: string }[];
+  quotaKeys: {
+    id: string;
+    /** 余额还是订阅——同名平台的两套 key 分开列 */
+    scenario: 'balance' | 'subscription';
+    displayName: string;
+    masked: string | null;
+    keyUrl?: string;
+    /** 该接口要普通 key 还是 admin key */
+    keyKind?: 'normal' | 'admin';
+    /** 是否已实现（未实测的接口先展示但不承诺可用） */
+    implemented?: boolean;
+    /** 是否需要 admin key，前端要提示 */
+    needsAdmin?: boolean;
+  }[];
   monthlyBudgetCny: number | null;
   usdToCny: number;
 }

@@ -6,15 +6,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BALANCE_CATALOG,
-  extractBalance,
+  API_CATALOG,
+  extractAmount,
   readPath,
   toNumber,
   verifiedSpecs,
-  type BalanceApiSpec,
+  type ApiSpec,
 } from '../src/core/quota/providers/catalog.ts';
 
-const spec = (over: Partial<BalanceApiSpec> = {}): BalanceApiSpec => ({
+const spec = (over: Partial<ApiSpec> = {}): ApiSpec => ({
   id: 't',
   displayName: 'T',
   endpoint: 'https://example.com/balance',
@@ -22,6 +22,7 @@ const spec = (over: Partial<BalanceApiSpec> = {}): BalanceApiSpec => ({
   amount: { path: 'data.balance', kind: 'balance' },
   currency: 'CNY',
   keyUrl: '',
+  scenario: 'balance',
   verified: '2026-01-01',
   ...over,
 });
@@ -53,41 +54,41 @@ test('toNumber 只接受真实数字，字符串空值返回 null', () => {
 
 // ── 余额提取 ──
 
-test('extractBalance 正常取值', () => {
-  const b = extractBalance(spec(), { data: { balance: 12.5 } });
+test('extractAmount 正常取值', () => {
+  const b = extractAmount(spec(), { data: { balance: 12.5 } });
   assert.deepEqual(b, { amount: 12.5, currency: 'CNY' });
 });
 
-test('extractBalance 解析失败返回 null 而不是 0', () => {
+test('extractAmount 解析失败返回 null 而不是 0', () => {
   // 这是最关键的一条：平台改字段名、账户没开通时，
   // 返回 0 会让用户以为「钱花光了」，返回 null 才能显示「解析失败」
-  assert.equal(extractBalance(spec(), { data: {} }), null);
-  assert.equal(extractBalance(spec(), { data: { balance: '--' } }), null);
-  assert.equal(extractBalance(spec(), null), null);
-  assert.equal(extractBalance(spec(), {}), null);
+  assert.equal(extractAmount(spec(), { data: {} }), null);
+  assert.equal(extractAmount(spec(), { data: { balance: '--' } }), null);
+  assert.equal(extractAmount(spec(), null), null);
+  assert.equal(extractAmount(spec(), {}), null);
 });
 
-test('extractBalance 支持 scale 换算', () => {
+test('extractAmount 支持 scale 换算', () => {
   // 有的平台按「分」返回，100 分 = 1 元
   const s = spec({ amount: { path: 'data.balance', kind: 'balance', scale: 0.01 } });
-  const b = extractBalance(s, { data: { balance: 1140 } });
+  const b = extractAmount(s, { data: { balance: 1140 } });
   assert.deepEqual(b, { amount: 11.4, currency: 'CNY' });
 });
 
-test('extractBalance 能从响应里读币种', () => {
+test('extractAmount 能从响应里读币种', () => {
   const s = spec({
     amount: { path: 'balance_infos[0].total_balance', kind: 'balance' },
     currencyPath: 'balance_infos[0].currency',
   });
-  const usd = extractBalance(s, { balance_infos: [{ currency: 'USD', total_balance: '5.00' }] });
+  const usd = extractAmount(s, { balance_infos: [{ currency: 'USD', total_balance: '5.00' }] });
   assert.deepEqual(usd, { amount: 5, currency: 'USD' });
-  const cny = extractBalance(s, { balance_infos: [{ currency: 'CNY', total_balance: '9.00' }] });
+  const cny = extractAmount(s, { balance_infos: [{ currency: 'CNY', total_balance: '9.00' }] });
   assert.deepEqual(cny, { amount: 9, currency: 'CNY' });
 });
 
-test('extractBalance 币种字段缺失时退回 spec 默认值', () => {
+test('extractAmount 币种字段缺失时退回 spec 默认值', () => {
   const s = spec({ currency: 'USD', currencyPath: 'nope.currency' });
-  const b = extractBalance(s, { data: { balance: 3 } });
+  const b = extractAmount(s, { data: { balance: 3 } });
   assert.deepEqual(b, { amount: 3, currency: 'USD' });
 });
 
@@ -99,14 +100,14 @@ test('只有 verified 非空的条目会被启用', () => {
     assert.notEqual(s.verified, null, `${s.id} 未验证却在启用列表里`);
   }
   // 未验证的条目应存在于目录但不被启用
-  const unverified = BALANCE_CATALOG.filter((s) => s.verified === null);
+  const unverified = API_CATALOG.filter((s) => s.verified === null);
   for (const s of unverified) {
     assert.ok(!enabled.some((e) => e.id === s.id), `${s.id} 未验证却被启用`);
   }
 });
 
 test('目录里每个条目字段完整', () => {
-  for (const s of BALANCE_CATALOG) {
+  for (const s of API_CATALOG) {
     assert.ok(s.id && s.id.trim(), '缺 id');
     assert.ok(s.displayName, `${s.id} 缺 displayName`);
     assert.match(s.endpoint, /^https:\/\//, `${s.id} 端点必须是 https`);
@@ -115,9 +116,14 @@ test('目录里每个条目字段完整', () => {
   }
 });
 
-test('目录 id 不重复（否则 quotaKeys 会互相覆盖）', () => {
-  const ids = BALANCE_CATALOG.map((s) => s.id);
-  assert.equal(new Set(ids).size, ids.length, `重复 id：${ids.join(',')}`);
+test('同一场景内 id 不重复（不同场景允许同名）', () => {
+  // MiniMax 在「余额」和「订阅」各有一条，这是设计允许的：
+  // 两个场景的 key 分开存（minimax:balance / minimax:subscription），
+  // 但同场景内重复就会互相覆盖。
+  for (const sc of ['balance', 'subscription'] as const) {
+    const ids = API_CATALOG.filter((s) => s.scenario === sc).map((s) => s.id);
+    assert.equal(new Set(ids).size, ids.length, `场景 ${sc} 内有重复 id：${ids.join(',')}`);
+  }
 });
 
 // ── key 掩码（安全关键） ──
@@ -126,11 +132,13 @@ test('数据契约里的 key 只有掩码，任何情况不含明文', async () 
   const { buildDashboardData } = await import('../src/core/aggregate.ts');
   const { loadPricingNormalized } = await import('../src/core/pricing.ts');
   const SECRET = 'sk-supersecret-abcdefghijklmnop';
+  // 新格式是 `平台:场景`；同时保留一个旧格式键，验证两代写法都不泄明文
   const cfg = {
     quotaKeys: {
-      deepseek: SECRET,
-      moonshot: 'tiny',        // 短 key
-      openrouter: '',          // 空值
+      'deepseek:balance': SECRET,
+      'moonshot:balance': 'tiny',   // 短 key
+      'openrouter:balance': '',     // 空值
+      'minimax:subscription': SECRET,
     },
   };
   const d = await buildDashboardData([], cfg as never, loadPricingNormalized(7.2));
@@ -161,7 +169,7 @@ test('subtractPath：余额 = 累计充值 - 累计已用', () => {
     amount: { path: 'data.total_credits', subtractPath: 'data.total_usage', kind: 'balance' },
     currency: 'USD',
   });
-  const b = extractBalance(s, { data: { total_credits: 0.339163134, total_usage: 0.339163134 } });
+  const b = extractAmount(s, { data: { total_credits: 0.339163134, total_usage: 0.339163134 } });
   assert.ok(b, '应能解析');
   assert.equal(Number(b!.amount.toFixed(6)), 0, '余额必须是 0，不能是 total_credits 的 0.339');
   assert.equal(b!.currency, 'USD');
@@ -172,21 +180,21 @@ test('subtractPath：有剩额时算出真实剩余', () => {
     amount: { path: 'credits', subtractPath: 'usage', kind: 'balance' },
     currency: 'USD',
   });
-  const b = extractBalance(s, { credits: 10, usage: 3.5 });
+  const b = extractAmount(s, { credits: 10, usage: 3.5 });
   assert.equal(b!.amount, 6.5);
 });
 
 test('subtractPath：任一字段缺失就返回 null，不拿半个数硬算', () => {
   const s = spec({ amount: { path: 'credits', subtractPath: 'usage', kind: 'balance' } });
   // 只有 credits 没有 usage：不能把 credits 当余额返回
-  assert.equal(extractBalance(s, { credits: 10 }), null, '缺 usage 时不能退化成只取 credits');
-  assert.equal(extractBalance(s, { usage: 3 }), null);
-  assert.equal(extractBalance(s, { credits: 10, usage: null }), null);
-  assert.equal(extractBalance(s, { credits: 'x', usage: 3 }), null);
+  assert.equal(extractAmount(s, { credits: 10 }), null, '缺 usage 时不能退化成只取 credits');
+  assert.equal(extractAmount(s, { usage: 3 }), null);
+  assert.equal(extractAmount(s, { credits: 10, usage: null }), null);
+  assert.equal(extractAmount(s, { credits: 'x', usage: 3 }), null);
 });
 
 test('OpenRouter 在目录里已标记 verified 且使用相减', () => {
-  const or = BALANCE_CATALOG.find((s) => s.id === 'openrouter');
+  const or = API_CATALOG.find((s) => s.id === 'openrouter');
   assert.ok(or, '缺 OpenRouter 条目');
   assert.notEqual(or!.verified, null, '已用真实 key 验证，应标记 verified');
   assert.equal(or!.amount.subtractPath, 'data.total_usage', '必须减去 total_usage');
@@ -195,7 +203,7 @@ test('OpenRouter 在目录里已标记 verified 且使用相减', () => {
 // ── 鉴权方式（实测过的坑） ──
 
 test('MiniMax 必须用 bearer，裸 Authorization 会 1004', () => {
-  const mm = BALANCE_CATALOG.find((s) => s.id === 'minimax');
+  const mm = API_CATALOG.find((s) => s.id === 'minimax');
   assert.ok(mm, '缺 MiniMax 条目');
   // 实测 2026-11-05：auth:'raw' 时返回
   // {"base_resp":{"status_code":1004,"status_msg":"login fail: Please carry the
@@ -207,7 +215,7 @@ test('MiniMax 必须用 bearer，裸 Authorization 会 1004', () => {
 test('只有明确需要裸 key 的平台才用 raw', () => {
   // raw 是少数派：目前没有任何已验证平台需要它。
   // 若将来要加，必须像 MiniMax 一样用真实 key 实测过再写。
-  const rawOnes = BALANCE_CATALOG.filter((s) => s.auth === 'raw');
+  const rawOnes = API_CATALOG.filter((s) => s.auth === 'raw');
   for (const s of rawOnes) {
     assert.equal(s.verified, null, `${s.id} 用 raw 且标称已验证，需复核鉴权头格式`);
   }
