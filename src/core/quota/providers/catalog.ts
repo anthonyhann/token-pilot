@@ -27,6 +27,16 @@ export interface FieldPath {
   kind: 'balance' | 'remaining' | 'used';
   /** 数值换算：有些平台返回「分」，乘 0.01 才是元 */
   scale?: number;
+  /**
+   * 需要相减的第二个字段路径。
+   *
+   * 存在的必要：有些平台根本不返回「余额」，只给
+   * 「累计充值 total_credits」和「累计已用 total_usage」两个数。
+   * 余额 = credits - usage。直接把 credits 当余额会显示成「你还剩 ¥0.34」，
+   * 而实际上一分不剩——这比报错更危险，用户会以为自己还有钱。
+   * （OpenRouter 就是这种结构，2026-11 实测确认）
+   */
+  subtractPath?: string;
 }
 
 export interface BalanceApiSpec {
@@ -89,12 +99,18 @@ export const BALANCE_CATALOG: BalanceApiSpec[] = [
     displayName: 'OpenRouter',
     endpoint: 'https://openrouter.ai/api/v1/credits',
     auth: 'bearer',
-    // 返回结构：{"data":{"total_credits":<number>,"total_usage":<number>}}
-    amount: { path: 'data.total_credits', kind: 'balance' },
+    // 实测（2026-11-05，真实 key）：{"data":{"total_credits":0.339163134,
+    //   "total_usage":0.339163134}}
+    // 注意：total_credits 是**累计充值**不是余额，必须减去 total_usage。
+    // 直接拿 credits 当余额会显示「还剩 $0.34」，而实际剩余是 0。
+    amount: {
+      path: 'data.total_credits',
+      subtractPath: 'data.total_usage',
+      kind: 'balance',
+    },
     currency: 'USD',
     keyUrl: 'https://openrouter.ai/keys',
-    verified: null,
-    note: '待用真实 key 核实字段名',
+    verified: '2026-11-05',
   },
   {
     id: 'minimax',
@@ -154,8 +170,14 @@ export function toNumber(v: unknown): number | null {
 /** 从响应里取余额，取不到返回 null（UI 显示「解析失败」，绝不显示 0） */
 export function extractBalance(spec: BalanceApiSpec, data: unknown): Balance | null {
   const raw = readPath(data, spec.amount.path);
-  const n = toNumber(raw);
+  let n = toNumber(raw);
   if (n === null) return null;
+  // 两字段相减：任一字段缺失或非数字就不算——宁可报错也不猜余额
+  if (spec.amount.subtractPath) {
+    const sub = toNumber(readPath(data, spec.amount.subtractPath));
+    if (sub === null) return null;
+    n = n - sub;
+  }
   const scaled = spec.amount.scale ? n * spec.amount.scale : n;
   let currency: 'CNY' | 'USD' = spec.currency ?? 'CNY';
   if (spec.currencyPath) {

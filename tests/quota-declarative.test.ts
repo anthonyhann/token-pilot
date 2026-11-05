@@ -151,3 +151,43 @@ test('数据契约里的 key 只有掩码，任何情况不含明文', async () 
   const or = d.settings.quotaKeys.find((k) => k.id === 'openrouter');
   assert.equal(or?.masked, null, '空 key 视为未配置');
 });
+
+// ── 两字段相减（OpenRouter 这类"只给累计值"的平台） ──
+
+test('subtractPath：余额 = 累计充值 - 累计已用', () => {
+  // 真实结构（2026-11-05 实测）：充了 0.339、用掉 0.339，剩余 0
+  const s = spec({
+    id: 'openrouter',
+    amount: { path: 'data.total_credits', subtractPath: 'data.total_usage', kind: 'balance' },
+    currency: 'USD',
+  });
+  const b = extractBalance(s, { data: { total_credits: 0.339163134, total_usage: 0.339163134 } });
+  assert.ok(b, '应能解析');
+  assert.equal(Number(b!.amount.toFixed(6)), 0, '余额必须是 0，不能是 total_credits 的 0.339');
+  assert.equal(b!.currency, 'USD');
+});
+
+test('subtractPath：有剩额时算出真实剩余', () => {
+  const s = spec({
+    amount: { path: 'credits', subtractPath: 'usage', kind: 'balance' },
+    currency: 'USD',
+  });
+  const b = extractBalance(s, { credits: 10, usage: 3.5 });
+  assert.equal(b!.amount, 6.5);
+});
+
+test('subtractPath：任一字段缺失就返回 null，不拿半个数硬算', () => {
+  const s = spec({ amount: { path: 'credits', subtractPath: 'usage', kind: 'balance' } });
+  // 只有 credits 没有 usage：不能把 credits 当余额返回
+  assert.equal(extractBalance(s, { credits: 10 }), null, '缺 usage 时不能退化成只取 credits');
+  assert.equal(extractBalance(s, { usage: 3 }), null);
+  assert.equal(extractBalance(s, { credits: 10, usage: null }), null);
+  assert.equal(extractBalance(s, { credits: 'x', usage: 3 }), null);
+});
+
+test('OpenRouter 在目录里已标记 verified 且使用相减', () => {
+  const or = BALANCE_CATALOG.find((s) => s.id === 'openrouter');
+  assert.ok(or, '缺 OpenRouter 条目');
+  assert.notEqual(or!.verified, null, '已用真实 key 验证，应标记 verified');
+  assert.equal(or!.amount.subtractPath, 'data.total_usage', '必须减去 total_usage');
+});
