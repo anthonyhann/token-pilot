@@ -482,6 +482,37 @@ fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// 测试各平台 API Key 是否可用（桌面端用）。
+///
+/// 桌面端没有本地 serve，前端 fetch('/api/quota/test') 必然失败，
+/// 所以走 CLI：把 payload 从 stdin 喂给 `token-pilot quota-test`。
+/// 用 stdin 而不是命令行参数，是为了不让 key 出现在 ps 输出里。
+#[tauri::command]
+async fn quota_test(payload: String) -> Result<String, String> {
+    use std::io::Write;
+    let bin = resolve_bin("token-pilot")
+        .ok_or_else(|| "找不到 token-pilot 命令，无法测试连接".to_string())?;
+    let mut child = std::process::Command::new(bin)
+        .arg("quota-test")
+        .env("PATH", gui_safe_path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("启动测试失败：{e}"))?;
+
+    if let Some(mut si) = child.stdin.take() {
+        let _ = si.write_all(payload.as_bytes());
+    }
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("等待测试结果失败：{e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    String::from_utf8(out.stdout).map_err(|e| e.to_string())
+}
+
 // ───────────────────────── 面板尺寸 ─────────────────────────
 //
 // 面板是无边框窗口（decorations:false），系统不给拖拽缩放的边框，
@@ -1222,7 +1253,8 @@ fn main() {
             app_version,
             start_panel_resize,
             save_panel_size_cmd,
-            reset_panel_size
+            reset_panel_size,
+            quota_test
         ])
         .setup(|app| {
             // 让 ~/.token-pilot/dashboard.html 与 app 内置版本保持一致：

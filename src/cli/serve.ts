@@ -127,42 +127,19 @@ export async function serve(port = 17895): Promise<void> {
       }
       // 测试连接：用「本次输入的 key」直接打一次接口。
       // 必须先于保存就能测——否则用户得先存一个可能错的 key 才能验证。
+      // 测试连接：用「本次输入的 key」直接打一次接口。
+      // 必须先于保存就能测——否则用户得先存一个可能错的 key 才能验证。
+      // 逻辑在 core 里（testEndpoints），桌面端通过 Tauri 命令走同一条路径。
       if (url === '/api/quota/test' && req.method === 'POST') {
         const body = await readBody(req);
-        const { keys } = JSON.parse(body || '{}') as { keys?: Record<string, string> };
-        const { verifiedSpecs } = await import('../core/quota/providers/catalog.js');
-        const { fetchDeclarativeBalance, loadCustomEndpoints } = await import(
-          '../core/quota/providers/declarative.js'
-        );
-
-        // 自定义端点也转成同样形状的 spec，复用同一套请求/解析
-        const customs = (await loadCustomEndpoints()).map((c) => ({
-          id: c.id,
-          displayName: c.displayName,
-          endpoint: c.endpoint,
-          auth: c.auth,
-          amount: { path: c.amountPath, kind: 'balance' as const },
-          currency: c.currency ?? ('CNY' as const),
-          keyUrl: '',
-          verified: 'custom',
-        }));
-
-        const specs = [...verifiedSpecs(), ...customs];
-        const results = await Promise.all(
-          specs.map(async (spec) => {
-            const override = keys?.[spec.id]?.trim();
-            const probe = await fetchDeclarativeBalance(spec, override || undefined);
-            return {
-              id: spec.id,
-              displayName: spec.displayName,
-              ok: probe.ok,
-              detail:
-                probe.ok && probe.balance
-                  ? `${probe.balance.currency === 'CNY' ? '¥' : '$'}${probe.balance.amount.toFixed(2)}`
-                  : undefined,
-              error: probe.ok ? undefined : probe.error,
-            };
-          }),
+        const { keys, customs } = JSON.parse(body || '{}') as {
+          keys?: Record<string, string>;
+          customs?: unknown[];
+        };
+        const { testEndpoints } = await import('../core/quota/providers/declarative.js');
+        const results = await testEndpoints(
+          keys ?? {},
+          Array.isArray(customs) ? (customs as Parameters<typeof testEndpoints>[1]) : [],
         );
         res.writeHead(200, {
           'content-type': 'application/json; charset=utf-8',

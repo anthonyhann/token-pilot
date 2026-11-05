@@ -900,17 +900,20 @@ export function buildSubscriptions(
     auto.push({
       name: tp.planName,
       monthlyCny: tp.monthlyCny,
-      autoDetected: true,
+      origin: 'api',
       providerId: p.id,
     });
   }
   // 自动识别的平台，把用户可能手填过的同名条目过滤掉，防止重复计费
-  const autoNames = new Set(auto.map((a) => a.name));
+  const autoNames = new Set(auto.map((a) => a.name.toLowerCase()));
   const autoIds = new Set(auto.map((a) => a.providerId));
   const kept = manual.filter(
-    (m) => !autoNames.has(m.name) && !autoIds.has(m.name.toLowerCase()),
+    (m) => !autoNames.has(m.name.toLowerCase()) && !autoIds.has(m.name.toLowerCase()),
   );
-  return [...auto, ...kept.map((m) => ({ name: m.name, monthlyCny: m.monthlyCny, autoDetected: false }))];
+  return [
+    ...auto,
+    ...kept.map((m) => ({ name: m.name, monthlyCny: m.monthlyCny, origin: 'manual' as const })),
+  ];
 }
 
 async function buildSettings(

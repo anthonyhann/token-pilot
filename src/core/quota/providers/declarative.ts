@@ -204,6 +204,61 @@ export async function fetchDeclarativeBalance(
   };
 }
 
+/** 测试连接的单条结果 */
+export interface KeyTestResult {
+  id: string;
+  displayName: string;
+  ok: boolean;
+  /** 成功时给余额展示文案，如「¥20.10」 */
+  detail?: string;
+  error?: string;
+}
+
+/**
+ * 「测试连接」的统一实现。
+ *
+ * 为什么放在 core 而不是 serve：桌面端（Tauri）里没有本地 serve，
+ * 前端 fetch('/api/...') 必然失败。逻辑必须能在两种宿主里复用，
+ * 所以抽成纯函数，由 serve 的路由和 Tauri 命令各自调用。
+ *
+ * @param overrideKeys 本次界面上输入的 key（id → key）。
+ *   传了就优先用它们——用户刚粘的 key 还没保存，必须先能验证。
+ * @param customs 本次界面上新增、还没落盘的自定义端点。
+ */
+export async function testEndpoints(
+  overrideKeys: Record<string, string> = {},
+  customs: CustomEndpoint[] = [],
+): Promise<KeyTestResult[]> {
+  const saved = await loadCustomEndpoints();
+  // 界面上新增的 + 已保存的，按 id 去重（界面上的优先，可能是刚改过的）
+  const byId = new Map<string, CustomEndpoint>();
+  for (const c of saved) byId.set(c.id, c);
+  for (const c of customs) byId.set(c.id, c);
+
+  const specs: BalanceApiSpec[] = [...verifiedSpecs(), ...[...byId.values()].map(customToSpec)];
+
+  return Promise.all(
+    specs.map(async (spec) => {
+      const override = overrideKeys[spec.id]?.trim();
+      const probe = await fetchDeclarativeBalance(spec, override || undefined).catch((e) => ({
+        ok: false,
+        error: String(e).slice(0, 150),
+      }));
+      const balance = 'balance' in probe ? probe.balance : undefined;
+      return {
+        id: spec.id,
+        displayName: spec.displayName,
+        ok: probe.ok,
+        detail:
+          probe.ok && balance
+            ? `${balance.currency === 'CNY' ? '¥' : '$'}${balance.amount.toFixed(2)}`
+            : undefined,
+        error: probe.ok ? undefined : ('error' in probe ? String(probe.error) : '失败'),
+      };
+    }),
+  );
+}
+
 /** 全部内置已启用平台 + 用户自定义平台 */
 export async function fetchAllDeclarative(): Promise<ProviderQuota[]> {
   const customs = await loadCustomEndpoints();
