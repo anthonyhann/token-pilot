@@ -141,7 +141,15 @@ export const API_CATALOG: ApiSpec[] = [
     keyUrl: 'https://platform.stepfun.com/interface-key',
     keyKind: 'normal',
     verified: null,
-    note: '端点存在（401），字段结构待实测',
+    // 实测 2026-11-05（真实有效 key，/v1/models 返回 200 证明 key 可用）：
+    // 该端点返回 404 page not found —— 说明此前探测到的 401 是网关对
+    // 未认证请求的统一拦截，并不代表端点存在。这正是「401 不能当存在证据」
+    // 的又一个案例。
+    // 另外试过 /v1/user/balance、/v1/account/balance、/v1/users/me/balance、
+    // /v1/finance/balance、/v1/billing/balance、/v1/usage、/v1/open/balance、
+    // /v1/dashboard/billing/credit_grants 等 8 个路径，全部 404。
+    // 结论：StepFun 目前没有公开的余额查询接口，控制台可见但不能程序化读取。
+    note: '无公开余额接口（实测 8 个路径全 404，key 本身有效）',
   },
 
   // ───────── 订阅 / 额度 ─────────
