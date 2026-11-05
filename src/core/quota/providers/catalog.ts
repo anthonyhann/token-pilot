@@ -149,7 +149,41 @@ export const API_CATALOG: ApiSpec[] = [
     // /v1/finance/balance、/v1/billing/balance、/v1/usage、/v1/open/balance、
     // /v1/dashboard/billing/credit_grants 等 8 个路径，全部 404。
     // 结论：StepFun 目前没有公开的余额查询接口，控制台可见但不能程序化读取。
-    note: '无公开余额接口（实测 8 个路径全 404，key 本身有效）',
+    note:
+      '无公开余额接口：官方文档（stepfun.mintlify.app）API 参考只有 chat 一个接口，' +
+      '16 个管理端点实测全 404，key 本身有效（/v1/models 返回 200）。余额只能到控制台看',
+  },
+
+  // ───────── 从 CC Switch 反解出的新平台（2026-11-05）─────────
+  // 这些端点是从 CC Switch.app 二进制里提取的（它有 src/commands/balance.rs）。
+  // 端点存在性已用无 key 请求确认（返回鉴权错误而非 404），
+  // 但字段结构未用真实 key 验证，所以 verified 仍为 null。
+  {
+    id: 'siliconflow',
+    displayName: 'SiliconFlow 硅基流动',
+    scenario: 'balance',
+    endpoint: 'https://api.siliconflow.cn/v1/user/info',
+    auth: 'bearer',
+    // CC Switch 里对应的字段名是 totalBalanceUSD
+    amount: { path: 'data.totalBalance', kind: 'balance' },
+    currency: 'CNY',
+    keyUrl: 'https://cloud.siliconflow.cn/account/ak',
+    keyKind: 'normal',
+    verified: null,
+    note: '端点存在（401 Token is invalid）；字段结构待真实 key 核实',
+  },
+  {
+    id: 'novita',
+    displayName: 'Novita AI',
+    scenario: 'balance',
+    endpoint: 'https://api.novita.ai/v3/user/balance',
+    auth: 'bearer',
+    amount: { path: 'availableBalance', kind: 'balance' },
+    currency: 'USD',
+    keyUrl: 'https://novita.ai/settings/key-management',
+    keyKind: 'normal',
+    verified: null,
+    note: '端点存在（400 MISSING_API_KEY）；字段结构待真实 key 核实',
   },
 
   // ───────── 订阅 / 额度 ─────────
@@ -165,6 +199,22 @@ export const API_CATALOG: ApiSpec[] = [
     keyKind: 'normal',
     verified: null,
     note: '已由独立 provider 处理（多额度窗口），此处保留端点记录',
+  },
+  {
+    id: 'kimi-coding',
+    displayName: 'Kimi Code 订阅',
+    scenario: 'subscription',
+    endpoint: 'https://api.kimi.com/coding/v1/usages',
+    auth: 'bearer',
+    // CC Switch 解析的字段链：data.limits[].detail → remaining /
+    // resetTime / five_hour / weekly_limit，以及 quota_5_hour / quota_7_day
+    // （resets_at / used_value_usd / max_value_usd）
+    amount: { path: 'data.limits[0].detail.remaining', kind: 'remaining' },
+    currency: 'CNY',
+    keyUrl: 'https://platform.moonshot.cn/console/api-keys',
+    keyKind: 'normal',
+    verified: null,
+    note: 'Kimi Code 订阅额度（与余额是两个账号体系）；字段链来自 CC Switch 解析逻辑，待实测',
   },
   {
     id: 'minimax',
