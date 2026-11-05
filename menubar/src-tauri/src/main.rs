@@ -1156,27 +1156,26 @@ fn explain_update_error(raw: &str) -> (String, Option<String>) {
         || low.contains("handshake")
         || low.contains("unreachable");
     if is_network {
+        // 提示必须极短：这条会作为菜单项显示，太长会把整个右键菜单撑宽变形。
+        // 完整步骤（具体点哪个开关、填什么地址）不放进菜单——
+        // 用户看到「开代理」就知道该干什么，细节放 README 里更合适。
         return (
             "连不上 github.com（网络被阻断）".to_string(),
-            Some(
-                "开启系统代理后重试：系统设置 › 网络 › 代理 › 勾选网页代理和安全网页代理，\
-                 都填 127.0.0.1:7890。或手动下载：github.com/anthonyhann/token-pilot/releases"
-                    .to_string(),
-            ),
+            Some("请开启系统代理后重试".to_string()),
         );
     }
     // 签名校验失败：多半是下载被中间人改写或包坏了
     if low.contains("signature") || low.contains("verify") || low.contains("minisign") {
         return (
             "安装包签名校验失败".to_string(),
-            Some("可能下载被中断或篡改。请重试；若反复出现，改用 Releases 页手动下载".to_string()),
+            Some("请重试；反复出现请手动下载".to_string()),
         );
     }
     // 版本 JSON 解析失败：多半是被网络劫持返回了错误页
     if low.contains("json") || low.contains("parse") || low.contains("deserialize") {
         return (
             "更新信息无法解析（可能被劫持）".to_string(),
-            Some("开启系统代理后重试，或到 Releases 页手动下载".to_string()),
+            Some("请开启系统代理后重试".to_string()),
         );
     }
     (raw.to_string(), None)
@@ -1624,18 +1623,30 @@ mod gui_path_tests {
 mod update_error_tests {
     use super::explain_update_error;
 
+    /// 菜单项的宽度（中日韩字符按 2 计）
+    fn menu_width(s: &str) -> usize {
+        s.chars().map(|c| if c.is_ascii() { 1 } else { 2 }).sum()
+    }
+
     #[test]
-    fn 连接失败给出系统代理和手动下载两条路() {
+    fn 连接失败给出简短的系统代理提示() {
         // 用户实测的原文
         let (short, hint) = explain_update_error("检查失败：error sending request url");
         assert!(short.contains("github.com"), "要点明连不上谁：{short}");
-        // 菜单短句要够短，否则托盘菜单会截断（实测 171 宽度单位就撑爆）
-        let width: usize = short.chars().map(|c| if c.is_ascii() { 1 } else { 2 }).sum();
-        assert!(width <= 60, "菜单短句太长（{width}）：{short}");
+
+        // 两行都会显示在托盘右键菜单里，太长会把菜单撑宽变形。
+        // 实测过一次：带完整操作步骤的提示有 171 宽度单位，菜单被挤到变形。
         let hint = hint.expect("网络错误必须给操作建议");
-        assert!(hint.contains("系统设置"), "要给出系统代理路径：{hint}");
-        assert!(hint.contains("127.0.0.1:7890"), "要给出具体代理地址：{hint}");
-        assert!(hint.contains("releases"), "要给手动下载兜底：{hint}");
+        assert!(hint.contains("系统代理"), "要提示开代理：{hint}");
+        assert!(
+            menu_width(&hint) <= 30,
+            "提示必须极短（当前 {} 宽度单位）：{hint}",
+            menu_width(&hint)
+        );
+        // 完整步骤（系统设置路径、代理地址）不该塞进菜单
+        assert!(!hint.contains("127.0.0.1"), "具体地址不该进菜单：{hint}");
+        assert!(!hint.contains("系统设置"), "操作路径不该进菜单：{hint}");
+
         // 不应该把底层错误原样留在最前面
         assert!(!short.starts_with("检查失败"), "不该原样透传：{short}");
     }
