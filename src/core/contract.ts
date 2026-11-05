@@ -117,6 +117,14 @@ export interface SettingsData {
   overrideNames: string[];   // 当前被人工覆写的模型名（弹窗 diff 保存用）
   cloudApis: { name: string; monthlyCny: number }[];
   subscriptions: { name: string; monthlyCny: number }[];
+  /**
+   * 各平台的 API Key 配置状态。
+   *
+   * ⚠️ 这里**只放掩码**（后 4 位），永远不放明文。
+   * 前端需要的只是「有没有配 / 配的是哪一把」，完整 key 只在本机
+   * config.json 里，任何情况下都不经过数据契约。
+   */
+  quotaKeys: { id: string; displayName: string; masked: string | null; keyUrl?: string }[];
   monthlyBudgetCny: number | null;
   usdToCny: number;
 }

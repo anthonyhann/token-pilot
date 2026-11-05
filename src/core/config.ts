@@ -29,6 +29,14 @@ export interface TokenPilotConfig {
     applyClaudeCode?: boolean;   // 是否写 Claude Code 的 autoCompactEnabled（改宿主配置，需用户明示）
     installRtk?: boolean;        // 是否安装 RTK 输出压缩层（用户勾选才装）
   };
+  /**
+   * 各平台的 API Key，用于查询余额 / 额度。
+   * 键是平台 id（deepseek / moonshot / openrouter / 自定义端点 id）。
+   *
+   * 只存在本机 config.json，不上传任何地方。
+   * 前端永远拿不到明文：设置面板只显示后 4 位。
+   */
+  quotaKeys?: Record<string, string>;
 }
 
 // 状态目录：测试用 TOKEN_PILOT_HOME 隔离到临时目录，避免碰用户真实数据

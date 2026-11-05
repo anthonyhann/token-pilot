@@ -903,7 +903,16 @@ fn save_config(json: String) -> Result<Value, String> {
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_else(|| serde_json::json!({}));
-    for k in ["monthlyBudgetCny", "priceOverrides", "cloudApis", "subscriptions", "autoCompact"] {
+    // quotaKeys：用户在设置里填的各平台 API Key（用于余额查询）。
+    // 不加进白名单的话，界面填了也存不下来——这是「能填 key」这条链路的前提。
+    for k in [
+        "monthlyBudgetCny",
+        "priceOverrides",
+        "cloudApis",
+        "subscriptions",
+        "autoCompact",
+        "quotaKeys",
+    ] {
         if let Some(v) = patch.get(k) {
             cur[k] = v.clone();
         }
