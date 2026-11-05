@@ -105,13 +105,42 @@ Real accounting bugs fixed (2026-10-21, 4,787 log files on my machine):
 
 Billing answers "how much did I spend"; quotas answer "how much is left". The latter comes straight from each provider's own endpoint, not from local estimation.
 
+**Verified working** (checked with a real key returning real data):
+
 | Provider | What you get | Source |
 |---|---|---|
 | **OpenCode Go** | rolling / weekly / monthly usage percent | Official API, reuses OpenCode's own login |
 | **Volcengine Ark** | Agent Plan absolute + percent; Coding Plan percent | Official CLI `arkcli usage plan` |
 | **Zhipu GLM** | Quota windows + plan tier | Official API |
-| **DeepSeek / Moonshot** | Cash balance | Official balance API |
-| **MiniMax** | Remaining token plan | Official API |
+| **DeepSeek** | Cash balance | `GET /user/balance` |
+| **Moonshot / Kimi** | Available balance (voucher + cash) | `GET /v1/users/me/balance` |
+| **OpenRouter** | Remaining credit (total_credits − total_usage) | `GET /api/v1/credits` |
+
+**Endpoint found, awaiting verification** (labelled "待验证" in the UI):
+
+| Provider | Needs | Blocker |
+|---|---|---|
+| MiniMax balance | **admin key** | normal key returns `token_type_mismatch` |
+| MiniMax token plan | Active subscription | returns `2062` without one, so field shape unknown |
+| Kimi Code subscription | Kimi Code plan | endpoint + field chain known, unverified |
+| Novita AI | normal key | endpoint exists, fields unverified |
+| StepFun | — | **no public balance API** (16 paths 404, docs only cover chat) |
+| SiliconFlow | — | **CN endpoint deprecated** (410) |
+
+> Why two lists: a 401 does not prove an endpoint works — many gateways return 401 for nonexistent paths too.
+> Only a real key returning real JSON with verified field semantics counts as "working".
+> This rule caught two real traps: OpenRouter's `total_credits` is *cumulative top-up*, not balance
+> (would have shown "$0.34 left" on a fully spent account), and MiniMax's auth header format
+> error looked exactly like an invalid key.
+
+**Balance and subscription are separate things**, configured and displayed separately:
+
+| | Balance | Subscription |
+|---|---|---|
+| Answers | how much money is left | how much quota used, when it resets |
+| Key | usually a normal key | some providers need an admin key |
+
+Keys are stored per `provider:scenario`, so one provider can use a normal key for its subscription and an admin key for its balance without conflict.
 
 **Where credentials come from** (three levels, whatever you have):
 
@@ -170,7 +199,7 @@ Legend: `[x]` done · `[ ]` planned · `[⏸]` blocked on something outside the 
 - [x] OpenCode adapter (SQLite) · Qoder (session counts only, model is "auto" — labelled honestly) · pi · Cursor spike (no token usage data → detection-only)
 - [x] Cloud usage API: Doubao Volcano (arkcli `usage stats`, daily granularity)
 - [⏸] Cloud usage APIs: OpenAI / Kimi
-  - Tested 2026-11: Kimi/Moonshot has **no public usage endpoint** — `/v1/users/me/balance` exists (401 auth), but `/v1/usage`, `/v1/users/me/usage`, `/api/v1/usage` are all 404. Balance yes, "how much did I spend today" no.
+  - Tested 2026-11: Kimi/Moonshot **balance works** (`GET /v1/users/me/balance` → `data.available_balance`, verified live). But there is **no usage endpoint** — `/v1/usage`, `/v1/users/me/usage`, `/api/v1/usage` are all 404. So: "how much is left" yes, "how much did I spend today" no.
   - OpenAI does have `/v1/organization/usage/*`, but those are organization-level endpoints requiring an Organization Admin key. **I don't have one, so I can't verify whether a personal key works.** Marked blocked rather than "easy TODO".
   - Have an OpenAI admin key, or know Kimi's usage endpoint? Open a Discussion — I'll wire it up the same day it's verified.
 

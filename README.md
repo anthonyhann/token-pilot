@@ -126,14 +126,32 @@ npm test                              # 69 个单元测试（定价/采集口径
 
 账单回答「花了多少钱」，额度回答「还能用多少」。后者来自平台自己的接口，不是本地推算。
 
+**已实测可用**（用真实 key 打出真实数据验证过）：
+
 | 平台 | 能拿到什么 | 数据来源 |
 |---|---|---|
 | **OpenCode Go** | 滚动 / 本周 / 本月三个窗口的已用百分比 | 官方接口，用 OpenCode 自己的登录态 |
 | **火山方舟** | Agent Plan 的额度绝对值 + 百分比；Coding Plan 的百分比 | 官方 CLI `arkcli usage plan` |
 | **智谱 GLM** | 额度窗口 + 套餐档位 | 官方接口 |
-| **DeepSeek / Moonshot** | 现金余额 | 官方余额接口 |
-| **OpenRouter** | 剩余额度（累计充值 − 累计已用） | 官方接口，实测确认 |
-| **MiniMax** | Token Plan 剩余量 | 官方接口 |
+| **DeepSeek** | 现金余额 | `GET /user/balance` |
+| **Moonshot / Kimi** | 可用余额（代金券 + 现金） | `GET /v1/users/me/balance` |
+| **OpenRouter** | 剩余额度（累计充值 − 累计已用） | `GET /api/v1/credits` |
+
+**已探到端点、等待实测**（界面上标「待验证」，拿到对应 key 就能启用）：
+
+| 平台 | 需要什么 | 卡在哪 |
+|---|---|---|
+| MiniMax 余额 | **admin key** | 普通 key 报 `token_type_mismatch` |
+| MiniMax Token Plan | 有效订阅 | 账号无订阅时返回 `2062`，拿不到字段结构 |
+| Kimi Code 订阅 | Kimi Code 订阅账号 | 端点与字段链已知，待验证 |
+| Novita AI | 普通 key | 端点存在，字段待验证 |
+| 阶跃 StepFun | — | **无公开余额接口**（16 个路径全 404，文档只有 chat） |
+| SiliconFlow | — | **国内站接口已废弃**（410 deprecated） |
+
+> 为什么分两栏：探到 401 不代表接口能用——很多网关对不存在的路径也返 401。
+> 只有用真实 key 拿到真实 JSON、确认字段语义无误的，才算「可用」。
+> 这个原则避免了两次误判：OpenRouter 的「累计充值」差点被当成余额
+> （会显示「还剩 $0.34」而实际已用光），MiniMax 的鉴权头格式错差点被当成 key 无效。
 
 **凭证从哪来**（三级降级，装了哪个用哪个）：
 
@@ -141,9 +159,24 @@ npm test                              # 69 个单元测试（定价/采集口径
 2. 平台自己的登录凭据（如 OpenCode 的 `~/.local/share/opencode/auth.json`）—— 装了该工具就有
 3. [CC Switch](https://github.com/farion1231/cc-switch) 的配置 —— **装了才自动读取，不装完全可以正常用**
 
-> 第 3 层是便利不是依赖：不装 CC Switch 的用户，填一次 key 就能获得全部额度功能。
+> 第 3 层是便利不是依赖：不装 CC Switch 的用户，点「+ 添加平台」填一次 key 就能获得全部额度功能。
+> CC Switch 里配过的平台会自动回填成「CC Switch 读取」并设为只读，避免你手填一遍算两次。
 
-**自己加平台**：设置里「添加自定义平台」，填「名称 + 余额接口地址 + 金额字段路径（如 `data.balance`）」就能查任意提供余额接口的服务，不用等我发版。内置平台的端点定义在 [`catalog.ts`](src/core/quota/providers/catalog.ts)，加一条就是加一个平台。
+**怎么加平台**：
+
+1. 设置里点「+ 添加平台」→ 下拉选平台 → 粘贴 key → 确定。余额和订阅是两套 key，分开填
+2. 内置列表没有的，选「添加自定义平台」，填「名称 + 接口地址 + 金额字段路径（如 `data.balance`）」即可
+3. 内置平台的端点定义在 [`catalog.ts`](src/core/quota/providers/catalog.ts)，加一条数据就是加一个平台
+
+**余额和订阅是两件事**，所以分开配置、分开显示：
+
+| | 余额 | 订阅 |
+|---|---|---|
+| 回答 | 账户还剩多少钱 | 套餐用了多少、何时重置 |
+| key | 通常普通 key 即可 | 部分平台要 admin key |
+| 例子 | DeepSeek ¥20.10 | 火山 Coding Plan 本月 29% |
+
+同一个平台可以两套都配（比如 MiniMax 查订阅用普通 key、查余额用 admin key），key 按「平台 + 场景」分开存，互不覆盖。
 
 **关于接口字段的坑**：有些平台不返回「余额」，只给「累计充值」和「累计已用」两个数（OpenRouter 就是这样）。直接拿累计充值当余额会显示成「还剩 $0.34」，而实际一分不剩——所以这类平台会做减法。没验证过字段语义的接口一律标为未启用，不会拿错的数字糊弄你。
 
@@ -242,7 +275,7 @@ token-pilot 免费且 MIT。如果它帮你省下了 AI 账单，可以请我喝
 - [x] Cursor spike（结论：无 token 用量数据，ai-code-tracking 是代码追踪非用量 → 诚实归「仅检测」）
 - [x] 云端用量 API：Doubao 火山（arkcli usage stats，日粒度）
 - [⏸] 云端用量 API：OpenAI / Kimi 开放平台
-  - **实测结论**（2026-11 探测）：Kimi 开放平台**没有公开的用量查询端点**——`/v1/users/me/balance` 存在（401 需鉴权），但 `/v1/usage`、`/v1/users/me/usage`、`/api/v1/usage` 全部 404。目前只能查余额，查不到「今天用了多少」
+  - **实测结论**（2026-11）：Kimi 的**余额已接通**（`GET /v1/users/me/balance` → `data.available_balance`，真实 key 验证通过）。但**没有用量查询端点**——`/v1/usage`、`/v1/users/me/usage`、`/api/v1/usage` 全部 404。所以「还剩多少」能查，「今天花了多少」查不到
   - OpenAI 有 `/v1/organization/usage/*` 这类用量端点，但都是组织级接口，需要 Organization Admin key 才能调。**我没有 admin key，无法验证个人 key 是否也可用**——所以这项标「卡住」而不是「简单待办」
   - 如果你手上有 OpenAI 的 admin key 或知道 Kimi 的用量接口，发我实测一次，验证通过我当天就能接上
 
