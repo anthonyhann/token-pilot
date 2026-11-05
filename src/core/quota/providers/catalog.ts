@@ -102,12 +102,15 @@ export const API_CATALOG: ApiSpec[] = [
     scenario: 'balance',
     endpoint: 'https://api.moonshot.cn/v1/users/me/balance',
     auth: 'bearer',
+    // 实测 2026-11-05（真实 key）：
+    // {"code":0,"data":{"available_balance":15,"voucher_balance":15,"cash_balance":0}}
+    // available_balance = 代金券 + 现金，即真正可用的总额——就该显示它，
+    // 单看 cash_balance 会显示 0（钱都在代金券里），那是误导。
     amount: { path: 'data.available_balance', kind: 'balance' },
     currency: 'CNY',
     keyUrl: 'https://platform.moonshot.cn/console/api-keys',
     keyKind: 'normal',
-    verified: null,
-    note: '端点存在（401），字段结构待实测',
+    verified: '2026-11-05',
   },
   {
     id: 'minimax',
@@ -122,7 +125,10 @@ export const API_CATALOG: ApiSpec[] = [
     keyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     keyKind: 'admin',
     verified: null,
-    note: '需要 admin key；普通 key 报 token_type_mismatch',
+    // 实测 2026-11-05：两个普通 key（sk-api-...）都返回
+    // 403 {"code":"token_type_mismatch","message":"api key is not an admin key"}。
+    // 查余额必须到控制台单独创建 admin key，普通 API key 不行。
+    note: '需要 admin key；实测普通 sk-api- key 报 token_type_mismatch',
   },
   {
     id: 'stepfun',
@@ -165,7 +171,10 @@ export const API_CATALOG: ApiSpec[] = [
     keyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     keyKind: 'normal',
     verified: null,
-    note: '无订阅返回 2062 no active token plan subscription',
+    // 实测 2026-11-05：key 有效（能过鉴权），但该账号无生效订阅，
+    // 返回 2062 no active token plan subscription，拿不到 model_remains 结构，
+    // 所以无法确认字段路径，暂不启用。
+    note: '账号无生效 Token Plan 订阅（2062），字段结构未实测',
   },
 ];
 
