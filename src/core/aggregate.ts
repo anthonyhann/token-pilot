@@ -12,7 +12,7 @@ import { detectRetryLoops } from './retry-detector.js';
 import { savingsAdvice } from './savings.js';
 import { computeCompression } from './compression.js';
 import { buildAdapterTiers, HOST_TIERS } from './registry.js';
-import { BALANCE_CATALOG } from './quota/providers/catalog.js';
+import { API_CATALOG, keySlot } from './quota/providers/catalog.js';
 import { APP_VERSION } from './version.js';
 
 /**
@@ -853,21 +853,33 @@ function buildKeyStatus(cfg: TokenPilotConfig): SettingsData['quotaKeys'] {
     return t.length <= 8 ? '••••' : `••••${t.slice(-4)}`;
   };
 
-  // 内置平台：即使没配 key 也列出，给用户「去哪申请」的入口
-  for (const spec of BALANCE_CATALOG) {
-    shown.add(spec.id);
+  // 内置平台：每个「平台 × 场景」一行。余额和订阅是两套 key，
+  // 必须分开列——MiniMax 就是普通 key 能查订阅、admin key 才能查余额。
+  for (const spec of API_CATALOG) {
+    const slot = keySlot(spec.id, spec.scenario);
+    shown.add(slot);
     rows.push({
       id: spec.id,
+      scenario: spec.scenario,
       displayName: spec.displayName,
-      masked: mask(stored[spec.id]),
+      masked: mask(stored[slot]),
       keyUrl: spec.keyUrl || undefined,
+      keyKind: spec.keyKind,
+      needsAdmin: spec.keyKind === 'admin',
+      implemented: spec.verified !== null,
     });
   }
 
-  // 用户自己配过但不在内置目录里的（自定义端点等）也要显示，否则用户存了看不见
-  for (const [id, key] of Object.entries(stored)) {
-    if (shown.has(id)) continue;
-    rows.push({ id, displayName: id, masked: mask(key) });
+  // 用户自己配过但不在内置目录里的（自定义端点等）也要显示，否则存了看不见
+  for (const [slot, key] of Object.entries(stored)) {
+    if (shown.has(slot)) continue;
+    const [id, sc] = slot.split(':');
+    rows.push({
+      id: slot,
+      scenario: (sc as 'balance' | 'subscription') ?? 'balance',
+      displayName: id,
+      masked: mask(key),
+    });
   }
   return rows;
 }

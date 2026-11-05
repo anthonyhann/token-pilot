@@ -26,10 +26,20 @@ export interface ResolvedKey {
   detail: string;
 }
 
-/** 从 token-pilot 自己的配置读（优先级最高，用户显式填的） */
-export function fromConfig(providerId: string): ResolvedKey | null {
+/**
+ * 从 token-pilot 自己的配置读（优先级最高，用户显式填的）。
+ *
+ * 存储键是 `平台:场景`（如 `minimax:balance` / `minimax:subscription`），
+ * 因为余额和订阅往往要不同的 key（MiniMax 查余额要 admin key）。
+ *
+ * 兼容旧数据：早先只按平台名存（`deepseek`），读不到新键时回退到旧键，
+ * 这样升级后用户已填的 key 不会失效。
+ */
+export function fromConfig(providerId: string, scenario?: 'balance' | 'subscription'): ResolvedKey | null {
   const cfg = loadConfig() as { quotaKeys?: Record<string, string> };
-  const key = cfg.quotaKeys?.[providerId];
+  const store = cfg.quotaKeys ?? {};
+  const slot = scenario ? `${providerId}:${scenario}` : providerId;
+  const key = store[slot] ?? store[providerId];
   if (!key || !key.trim()) return null;
   return { key: key.trim(), origin: 'config', detail: '来自 token-pilot 设置' };
 }
@@ -130,9 +140,10 @@ print('')
 export async function resolveKey(
   providerId: string,
   ccSwitchPattern?: string,
+  scenario?: 'balance' | 'subscription',
 ): Promise<ResolvedKey | null> {
   return (
-    fromConfig(providerId) ??
+    fromConfig(providerId, scenario) ??
     fromNative(providerId) ??
     (ccSwitchPattern ? await fromCcSwitch(ccSwitchPattern) : null)
   );

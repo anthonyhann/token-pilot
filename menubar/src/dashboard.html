@@ -384,6 +384,12 @@ footer .notes{max-width:560px}
 .key-result .kr-ok{color:var(--pos-text);font-weight:700}
 .key-result .kr-bad{color:var(--warn);font-weight:700}
 .key-result .kr-line{display:flex;gap:6px}
+/* 平台标签：余额/订阅/需admin/待验证 */
+.key-tag{display:inline-block;font-size:9px;font-weight:700;border-radius:4px;padding:1px 5px;margin-left:5px;vertical-align:middle}
+.key-tag.bal{color:var(--info);background:color-mix(in oklab,var(--info) 13%,transparent)}
+.key-tag.sub{color:var(--accent-2);background:color-mix(in oklab,var(--accent-2) 14%,transparent)}
+.key-tag.admin{color:var(--warn);background:color-mix(in oklab,var(--warn) 14%,transparent)}
+.key-tag.todo{color:var(--muted);background:var(--track)}
 
 /* 设置项：复选框 + 标题 + 说明的三层结构 */
 .opt{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;margin:2px 0;border:1px solid transparent;border-radius:9px;cursor:pointer;transition:background .14s var(--ease),border-color .14s var(--ease)}
@@ -727,7 +733,7 @@ footer .notes{max-width:560px}
           </div>
           <div id="mKeys"></div>
           <div class="key-actions">
-            <button class="addrow" type="button" id="mAddCustom">+ 添加自定义平台</button>
+            <button class="addrow" type="button" id="mAddCustom">+ 添加平台</button>
             <button class="addrow" type="button" id="mTestKeys">测试连接</button>
           </div>
           <div id="mKeyResult" class="key-result"></div>
@@ -1110,7 +1116,14 @@ function loadSettingsFromD(){
     // 每条：{id, displayName, masked, keyUrl, value}
     // value 是用户本次输入的新 key（空串=不改）；masked 是已存 key 的掩码
     keys:(s.quotaKeys||[]).map(function(k){
-      return {id:k.id,displayName:k.displayName,masked:k.masked,keyUrl:k.keyUrl||"",value:""};
+      // added：已配置 key 的视为已添加，其余默认不出现在列表里
+      // （否则一打开设置就是十几行空输入框，用户根本不知道该填哪个）
+      return {
+        id:k.id, scenario:k.scenario||'balance', displayName:k.displayName,
+        masked:k.masked, keyUrl:k.keyUrl||"", value:"",
+        needsAdmin:!!k.needsAdmin, implemented:k.implemented!==false,
+        added:!!k.masked
+      };
     })
   };
 }
@@ -1123,22 +1136,87 @@ function loadSettingsFromD(){
 function renderKeyRows(){
   var box=$("#mKeys");
   if(!box||!settings)return;
-  if(!settings.keys.length){
-    box.innerHTML='<div class="key-empty-note">还没有可查询的平台。点下面「添加自定义平台」可以接入任意提供余额接口的服务。</div>';
+  // 只显示「已添加」的平台：用户选了哪个平台才出现哪一行，
+  // 不再把全部内置平台铺开——那样列表又长又吵。
+  var picked = settings.keys.filter(function(k){return k.added || k.masked;});
+  if(!picked.length){
+    box.innerHTML='<div class="key-empty-note">还没有添加平台。点下面「+ 添加平台」，选平台、填 API Key 即可。</div>';
     return;
   }
-  box.innerHTML=settings.keys.map(function(k,i){
-    var ph = k.masked ? ("已配置 "+k.masked+"，留空不修改") : "粘贴 API Key";
+  box.innerHTML=picked.map(function(k){
+    var i=settings.keys.indexOf(k);
+    // 刚添加还没保存的 key 也要让用户看到「已填」
+    var ph = k.masked ? ("已配置 "+k.masked+"，留空不修改")
+             : (k.value ? "已填入（未保存），保存后生效" : "粘贴 API Key");
     var link = k.keyUrl ? '<a href="'+esc(k.keyUrl)+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--info);margin-left:6px">去申请</a>' : "";
+    var tags='';
+    if(k.scenario==='subscription')tags+='<span class="key-tag sub">订阅</span>';
+    else tags+='<span class="key-tag bal">余额</span>';
+    if(k.needsAdmin)tags+='<span class="key-tag admin" title="该平台查余额需要 admin key，普通 key 会报权限错误">需 admin key</span>';
+    if(k.implemented===false)tags+='<span class="key-tag todo" title="接口已探到，但字段结构尚未用真实 key 验证，暂不保证可用">待验证</span>';
     return '<div class="key-row">'+
-      '<span class="key-name" title="'+esc(k.id)+'">'+esc(k.displayName)+'</span>'+
+      '<span class="key-name" title="'+esc(k.id)+'">'+esc(k.displayName)+tags+'</span>'+
       '<input type="password" data-key="'+i+'" value="" placeholder="'+esc(ph)+'" aria-label="'+esc(k.displayName)+' 的 API Key" autocomplete="off" spellcheck="false">'+
-      '<span>'+link+(k.masked?'<button class="key-del" type="button" data-keyclear="'+i+'" aria-label="清除 '+esc(k.displayName)+' 的 key" title="清除已保存的 key">×</button>':'')+'</span>'+
+      '<span>'+link+'<button class="key-del" type="button" data-keyclear="'+i+'" aria-label="移除 '+esc(k.displayName)+'" title="移除该平台">×</button></span>'+
     '</div>';
   }).join("");
 }
 
-/* 自定义平台：id 由名称生成，重复则拒绝 */
+/* 添加平台：一个下拉选平台 + 一个输入框填 key，两步搞定。
+   比原来的「填名称/端点/字段路径/鉴权方式」四条强太多——
+   绝大多数用户只想「选个平台、粘个 key」。 */
+function showAddPlatform(){
+  if(!settings)return;
+  var box=$("#mKeyResult");
+  if(!box)return;
+  // 列出所有已声明、且还没添加的平台，按场景分组
+  var avail=settings.keys.filter(function(k){return !k.added && !k.masked;});
+  if(!avail.length){
+    box.innerHTML='<div class="kr-line"><span class="kr-ok">所有内置平台都已添加</span></div>';
+    return;
+  }
+  var optBal=avail.filter(function(k){return k.scenario!=='subscription'});
+  var optSub=avail.filter(function(k){return k.scenario==='subscription'});
+  function optGroup(label,list){
+    if(!list.length)return '';
+    return '<optgroup label="'+esc(label)+'">'+list.map(function(k){
+      return '<option value="'+esc(k.id+'|'+k.scenario)+'">'+esc(k.displayName)+(k.needsAdmin?'（需 admin key）':'')+'</option>';
+    }).join('')+'</optgroup>';
+  }
+  box.innerHTML =
+    '<div class="key-custom">'+
+      '<select id="pkPick" aria-label="选择平台" style="grid-column:1/-1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px;color:var(--fg)">'+
+        optGroup('余额查询',optBal)+optGroup('订阅额度',optSub)+
+      '</select>'+
+      '<input id="pkKey" type="password" placeholder="粘贴该平台的 API Key" aria-label="API Key" style="grid-column:1/-1" autocomplete="off" spellcheck="false">'+
+    '</div>'+
+    '<div class="key-actions">'+
+      '<button class="addrow" type="button" id="pkOk">确定</button>'+
+      '<button class="addrow" type="button" id="pkCancel">取消</button>'+
+      '<button class="addrow" type="button" id="pkCustom">添加自定义平台</button>'+
+    '</div>'+
+    '<div id="pkHint" class="kr-line" style="color:var(--muted)">选平台、填 key、点确定即可。不确定去哪拿 key 的，添加后会显示「去申请」链接。</div>';
+  $("#pkCancel").addEventListener("click",function(){box.innerHTML="";});
+  $("#pkCustom").addEventListener("click",addCustomEndpoint);
+  $("#pkOk").addEventListener("click",function(){
+    var v=$("#pkPick").value||"";
+    var key=($("#pkKey").value||"").trim();
+    var hint=$("#pkHint");
+    var parts=v.split("|");
+    var id=parts[0], sc=parts[1];
+    if(!id)return;
+    if(!key){hint.innerHTML='<span class="kr-bad">请粘贴 API Key（留空会添加一个空行，稍后还能填）</span>';}
+    var target=settings.keys.filter(function(k){return k.id===id&&k.scenario===sc})[0];
+    if(target){
+      target.added=true;
+      if(key)target.value=key;
+    }
+    renderKeyRows();
+    box.innerHTML='<div class="kr-line"><span class="kr-ok">已添加 '+(target?target.displayName:id)+'</span>'+
+      (key?'<span>点「测试连接」验证，然后保存</span>':'<span>在列表里填入 key</span>')+'</div>';
+  });
+}
+
 /* 自定义平台：展开一个内联表单。
    原来用 prompt() 逐项追问，但 Tauri WebView 常静默拦截 prompt，
    表现就是「点了没反应」——没有对话框、没有报错、什么都没有。
@@ -1231,7 +1309,8 @@ function collectKeys(){
   if(!settings)return {keys:{}, customs:[]};
   var keys={}, customs=[];
   settings.keys.forEach(function(k){
-    if(k.value&&k.value.trim())keys[k.id]=k.value.trim();
+    var slot=k.id+':'+(k.scenario||'balance');
+    if(k.value&&k.value.trim())keys[slot]=k.value.trim();
     if(k._custom)customs.push(k._custom);
   });
   return {keys:keys, customs:customs};
@@ -1304,7 +1383,7 @@ modal.addEventListener("click",function(e){
   var d=e.target.closest("[data-del]");
   if(d){settings[d.dataset.del].splice(+d.dataset.i,1);renderSet()}
 });
-$("#mAddCustom").addEventListener("click",addCustomEndpoint);
+$("#mAddCustom").addEventListener("click",showAddPlatform);
 $("#mTestKeys").addEventListener("click",testKeys);
 $$(".addrow").forEach(function(b){
   // 只处理带 data-add 的行内「+ 添加」按钮。
@@ -1339,8 +1418,10 @@ $("#settingsSave").addEventListener("click",function(){
   // API Key：只发本次新填的 + 明确要清除的，不把已有 key 回传
   var qk={};
   settings.keys.forEach(function(k){
-    if(k._clear)qk[k.id]="";
-    else if(k.value&&k.value.trim())qk[k.id]=k.value.trim();
+    // 余额与订阅两套 key 分开存，键是 `平台:场景`
+    var slot=k.id+':'+(k.scenario||'balance');
+    if(k._clear)qk[slot]="";
+    else if(k.value&&k.value.trim())qk[slot]=k.value.trim();
   });
   if(Object.keys(qk).length)payload.quotaKeys=qk;
   // 自定义端点定义（写入独立文件 custom-endpoints.json，不混在 config 里）
