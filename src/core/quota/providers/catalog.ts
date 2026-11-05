@@ -162,15 +162,23 @@ export const API_CATALOG: ApiSpec[] = [
     id: 'siliconflow',
     displayName: 'SiliconFlow 硅基流动',
     scenario: 'balance',
+    // 官方文档（docs.siliconflow.com）确认端点是 /v1/user/info，字段 totalBalance。
+    // 但实测发现国内站该端点已废弃：
+    //   api.siliconflow.cn/v1/user/info → 410
+    //     {"code":20092,"message":"This endpoint is deprecated and is no longer available."}
+    // 国际站 api.siliconflow.com 同一端点返回 401「Token is invalid」——
+    // 说明端点在国际站仍有效，只是国内 key 不跨站。
+    // 保留 .cn 是因为国内用户绝大多数用 .cn；等官方恢复或换新路径再启用。
     endpoint: 'https://api.siliconflow.cn/v1/user/info',
     auth: 'bearer',
-    // CC Switch 里对应的字段名是 totalBalanceUSD
     amount: { path: 'data.totalBalance', kind: 'balance' },
     currency: 'CNY',
     keyUrl: 'https://cloud.siliconflow.cn/account/ak',
     keyKind: 'normal',
     verified: null,
-    note: '端点存在（401 Token is invalid）；字段结构待真实 key 核实',
+    note:
+      '国内站 /v1/user/info 已废弃（410 deprecated）；国际站同端点有效但 key 不跨站。' +
+      'key 本身有效（/v1/models 返回 200）',
   },
   {
     id: 'novita',
