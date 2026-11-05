@@ -360,6 +360,13 @@ footer .notes{max-width:560px}
 .m-row input:focus-visible{outline:2px solid var(--info);outline-offset:1px}
 .m-headr{color:var(--muted);font-size:10.5px;font-weight:700}
 .addrow{color:var(--info);font-weight:700;font-size:12px;padding:4px 0}
+/* 自动识别的订阅行：只读，视觉上区别于可编辑行 */
+.m-row.sub-auto{grid-template-columns:1fr auto auto;background:color-mix(in oklab,var(--pos) 7%,transparent);
+  border:1px solid color-mix(in oklab,var(--pos) 22%,var(--border));border-radius:8px;padding:6px 8px}
+.sub-auto-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub-auto-amt{font-size:12px;font-weight:800;color:var(--fg)}
+.sub-auto-tag{font-size:10px;font-weight:700;color:var(--pos-text);background:color-mix(in oklab,var(--pos) 14%,transparent);
+  border-radius:6px;padding:1px 6px;white-space:nowrap}
 
 /* API Key 区块 */
 .key-empty-note{font-size:11px;color:var(--muted);background:color-mix(in oklab,var(--info) 8%,transparent);
@@ -1088,7 +1095,7 @@ function loadSettingsFromD(){
   settings={
     models:(s.models||[]).map(function(m){return {n:String(m.name),i:String(m.inputCny),o:String(m.outputCny),c:String(m.cacheReadCny)}}),
     cloud:(s.cloudApis||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny)}}),
-    subs:(s.subscriptions||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny)}}),
+    subs:(s.subscriptions||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny),auto:!!m.autoDetected}}),
     budget:s.monthlyBudgetCny==null?"":String(s.monthlyBudgetCny),
     autoCompact:(s.autoCompact)||{enabled:false},
     // 每条：{id, displayName, masked, keyUrl, value}
@@ -1178,7 +1185,16 @@ function collectKeys(){
 function renderSet(){
   $("#mModels").innerHTML=settings.models.map(function(r,i){return '<div class="m-row r4"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="模型名" placeholder="模型名，如 glm-5.3"><input data-k="i" data-i="'+i+'" value="'+esc(r.i)+'" aria-label="输入单价"><input data-k="o" data-i="'+i+'" value="'+esc(r.o)+'" aria-label="输出单价"><input data-k="c" data-i="'+i+'" value="'+esc(r.c)+'" aria-label="缓存读单价"><button class="delrow" type="button" data-del="models" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mCloud").innerHTML=settings.cloud.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费用"><button class="delrow" type="button" data-del="cloud" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
-  $("#mSubs").innerHTML=settings.subs.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
+  $("#mSubs").innerHTML=settings.subs.map(function(r,i){
+    if(r.auto){
+      // 自动识别项：只读展示，禁止编辑和删除。
+      // 允许改动会导致「接口查到一份 + 手填一份」重复计费。
+      return '<div class="m-row r2 sub-auto"><span class="sub-auto-name" title="来自平台接口，已计入当月固定费用">'+esc(r.n)+'</span>'+
+        '<span class="sub-auto-amt">¥'+esc(r.p)+'</span>'+
+        '<span class="sub-auto-tag" title="月费由平台接口提供，无需手填">已自动识别</span></div>';
+    }
+    return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>';
+  }).join("");
   renderKeyRows();
   $("#mBudget").value=settings.budget;
   $("#mAutoCompact").checked=!!(settings.autoCompact&&settings.autoCompact.enabled);
@@ -1245,7 +1261,9 @@ $("#settingsSave").addEventListener("click",function(){
     if(changed||wasOverride)payload.priceOverrides[r.n]={input:parseFloat(r.i)||0,output:parseFloat(r.o)||0,cacheRead:parseFloat(r.c)||0};
   });
   settings.cloud.forEach(function(r){if(r.n)payload.cloudApis.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
-  settings.subs.forEach(function(r){if(r.n)payload.subscriptions.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
+  // 自动识别的条目由接口提供，不写回手填列表——写回去下次就会被当成手填项，
+  // 再叠加接口识别就重复了
+  settings.subs.forEach(function(r){if(r.n&&!r.auto)payload.subscriptions.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
   var b=parseFloat(settings.budget);
   payload.monthlyBudgetCny=isFinite(b)?b:null;
   // API Key：只发本次新填的 + 明确要清除的，不把已有 key 回传

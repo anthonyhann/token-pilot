@@ -520,16 +520,11 @@ export async function buildDashboardData(
   // ---------- 适配器状态 ----------
   const adapters: AdapterTier[] = await buildAdapterTiers(cfg);
 
-  // ---------- 设置 ----------
-  const settings = await buildSettings(events, cfg, pricing, fx, d30);
-
-  // ---------- 托盘 ----------
-  const trayTitle = budget
-    ? `${fmtCny(today.costUsd * fx)} · ${Math.round(budget.pct)}%`
-    : fmtCny(today.costUsd * fx);
-
   // 额度是可选能力：外部接口慢或挂掉都不能拖住账单。
   // 8 秒超时，超时就给 null，看板照常显示。
+  //
+  // 注意顺序：必须先于 buildSettings 采集——订阅登记要据此判断
+  // 「这个平台的月费已经能自动识别」，拿不到额度就只能退回手填。
   let quota: QuotaSnapshot | null = null;
   try {
     const { collectQuota } = await import('./quota/index.js');
@@ -540,6 +535,14 @@ export async function buildDashboardData(
   } catch {
     quota = null;
   }
+
+  // ---------- 设置 ----------
+  const settings = await buildSettings(events, cfg, pricing, fx, d30, quota);
+
+  // ---------- 托盘 ----------
+  const trayTitle = budget
+    ? `${fmtCny(today.costUsd * fx)} · ${Math.round(budget.pct)}%`
+    : fmtCny(today.costUsd * fx);
 
   return {
     appVersion: APP_VERSION,
@@ -869,12 +872,54 @@ function buildKeyStatus(cfg: TokenPilotConfig): SettingsData['quotaKeys'] {
   return rows;
 }
 
+/**
+ * 订阅登记：把「用户手填的」和「接口已能自动识别的」分开处理，避免重复计费。
+ *
+ * 问题：一个平台的订阅月费如果既从接口查到（Token Plan）、又被用户在
+ * 「订阅登记」里手填一遍，账单会把同一笔钱算两次。
+ *
+ * 规则：
+ *   - 接口能查到套餐且价格确定 → 标记 autoDetected，带上接口给的月费和套餐名，
+ *     前端显示「已自动识别，无需手填」，用户不能再手填覆盖
+ *   - 接口查不到 / 价格不确定 → 保持手填（autoDetected: false）
+ *
+ * 注意：现在还没有任何平台在接口里返回价格（MiniMax 只回用量不回价格），
+ * 所以这条通路目前只有在 provider 显式填了 monthlyCny 时才生效。
+ * 不编数字——宁可让用户手填，也不猜一个价格自动算进账单。
+ */
+export function buildSubscriptions(
+  cfg: TokenPilotConfig,
+  quota: QuotaSnapshot | null,
+): SettingsData['subscriptions'] {
+  const manual = cfg.subscriptions ?? [];
+  const auto: SettingsData['subscriptions'] = [];
+  for (const p of quota?.providers ?? []) {
+    const tp = p.tokenPlan;
+    // 只有「确实查到了套餐」且「价格明确」才算自动识别
+    if (!p.ok || !tp?.planName || tp.monthlyCny == null) continue;
+    auto.push({
+      name: tp.planName,
+      monthlyCny: tp.monthlyCny,
+      autoDetected: true,
+      providerId: p.id,
+    });
+  }
+  // 自动识别的平台，把用户可能手填过的同名条目过滤掉，防止重复计费
+  const autoNames = new Set(auto.map((a) => a.name));
+  const autoIds = new Set(auto.map((a) => a.providerId));
+  const kept = manual.filter(
+    (m) => !autoNames.has(m.name) && !autoIds.has(m.name.toLowerCase()),
+  );
+  return [...auto, ...kept.map((m) => ({ name: m.name, monthlyCny: m.monthlyCny, autoDetected: false }))];
+}
+
 async function buildSettings(
   events: UsageEvent[],
   cfg: TokenPilotConfig,
   pricing: PricingTable,
   fx: number,
   d30: number,
+  quota: QuotaSnapshot | null = null,
 ): Promise<SettingsData> {
   // RTK 状态：区分「本工具装的 rtk-oss」与「别的来源的 rtk」，前端据此如实展示
   const rtkSt = await import('./rtk.js')
@@ -919,7 +964,7 @@ async function buildSettings(
     models,
     overrideNames: Object.keys(cfg.priceOverrides ?? {}),
     cloudApis: cfg.cloudApis ?? [],
-    subscriptions: cfg.subscriptions ?? [],
+    subscriptions: buildSubscriptions(cfg, quota),
     quotaKeys: buildKeyStatus(cfg),
     monthlyBudgetCny: monthlyBudgetCny(cfg) ?? null,
     usdToCny: fx,
