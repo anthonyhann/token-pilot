@@ -101,7 +101,9 @@ export async function buildAdapterTiers(cfg: TokenPilotConfig): Promise<AdapterT
   }
 
   // ---- 四档：云端用量 API ----
-  const hasDoubao = (cfg.cloudApis ?? []).some((a) => /doubao|豆包|火山/i.test(a.name)) || await exists(path.join(HOME, '.arkcli'));
+  // 只靠 ~/.arkcli 判断：原先还会看 cloudApis 里有没有名字含「豆包/火山」的条目，
+  // 但那个字段已删除，而且这条路径本来就是冗余的——装了 arkcli 才是真的能查。
+  const hasDoubao = await exists(path.join(HOME, '.arkcli'));
   const tier4: AdapterChip[] = [
     { name: 'Doubao · 火山', status: hasDoubao ? 'on' : 'off', hint: hasDoubao ? 'arkcli 日粒度' : '未配置' },
     { name: 'OpenAI API', status: 'off', hint: '未配置' },

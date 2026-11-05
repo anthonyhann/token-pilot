@@ -89,12 +89,13 @@ test('预算：spent = 本月用量×汇率 + 固定费；pct 自洽', async () 
   const cfg: TokenPilotConfig = {
     monthlyBudgetCny: 1500,
     usdToCny: 7.0,
+    // 固定费只来自订阅登记：「云端用量 API」已删除（它与订阅登记性质重复，
+    // 都是往固定费里加一笔，却要用户在两处维护同一类东西）
     subscriptions: [{ name: 'X', monthlyCny: 100 }],
-    cloudApis: [{ name: 'Y', monthlyCny: 50 }],
   };
   const d = await buildDashboardData(events, cfg, pricing);
   assert.ok(d.budget);
-  const expect = 3 * 7.0 + 150;
+  const expect = 3 * 7.0 + 100;
   assert.ok(Math.abs(d.budget!.spentCny - expect) < 0.01, `spent ${d.budget!.spentCny} ≠ ${expect}`);
   assert.ok(Math.abs(d.budget!.pct - (expect / 1500) * 100) < 0.01);
   assert.ok(d.trayTitle.includes('¥'));

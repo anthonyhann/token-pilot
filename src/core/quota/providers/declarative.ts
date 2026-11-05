@@ -214,10 +214,17 @@ export async function fetchDeclarativeBalance(
 export interface KeyTestResult {
   id: string;
   displayName: string;
+  scenario: QuotaScenario;
   ok: boolean;
   /** 成功时给余额展示文案，如「¥20.10」 */
   detail?: string;
   error?: string;
+  /**
+   * 订阅场景才有：查到的套餐名与月费。
+   * 月费拿不到时 monthlyCny 为空——不猜价格，界面提示用户手填。
+   */
+  planName?: string;
+  monthlyCny?: number;
 }
 
 /**
@@ -253,15 +260,19 @@ export async function testEndpoints(
         error: String(e).slice(0, 150),
       }));
       const balance = 'balance' in probe ? probe.balance : undefined;
+      const tp = 'tokenPlan' in probe ? probe.tokenPlan : undefined;
       return {
         id: spec.id,
         displayName: spec.displayName,
+        scenario: spec.scenario,
         ok: probe.ok,
         detail:
           probe.ok && balance
             ? `${balance.currency === 'CNY' ? '¥' : '$'}${balance.amount.toFixed(2)}`
             : undefined,
         error: probe.ok ? undefined : ('error' in probe ? String(probe.error) : '失败'),
+        planName: tp?.planName,
+        monthlyCny: tp?.monthlyCny,
       };
     }),
   );
