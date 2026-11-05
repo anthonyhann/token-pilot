@@ -32,7 +32,7 @@ test('接口能查到套餐且价格明确 → 自动识别，不再需要手填
   assert.equal(out.length, 1);
   assert.equal(out[0].name, 'MiniMax Token Plan');
   assert.equal(out[0].monthlyCny, 199);
-  assert.equal(out[0].autoDetected, true);
+  assert.equal(out[0].origin, "api");
   assert.equal(out[0].providerId, 'minimax');
 });
 
@@ -75,7 +75,7 @@ test('不同平台的订阅不受影响，照常保留', () => {
   assert.equal(out.length, 2);
   const claude = out.find((s) => s.name === 'Claude Pro');
   assert.equal(claude?.monthlyCny, 140);
-  assert.equal(claude?.autoDetected, false);
+  assert.equal(claude?.origin, "manual");
 });
 
 test('接口没返回价格 → 不算自动识别，保留手填', () => {
@@ -95,7 +95,7 @@ test('接口没返回价格 → 不算自动识别，保留手填', () => {
     quota,
   );
   assert.equal(out.length, 1, '应该保留用户手填的那条');
-  assert.equal(out[0].autoDetected, false);
+  assert.equal(out[0].origin, "manual");
   assert.equal(out[0].monthlyCny, 199);
 });
 
@@ -111,7 +111,7 @@ test('没有套餐名 → 不自动识别（避免把无名字段当套餐）', 
     },
   ]);
   const out = buildSubscriptions({}, quota);
-  assert.equal(out.filter((s) => s.autoDetected).length, 0);
+  assert.equal(out.filter((s) => s.origin === "api").length, 0);
 });
 
 test('查询失败的平台不产生自动识别条目', () => {

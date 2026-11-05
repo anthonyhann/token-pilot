@@ -739,12 +739,18 @@ footer .notes{max-width:560px}
           <button class="addrow" type="button" data-add="models">+ 添加模型</button>
         </div>
         <div class="m-sec">
-          <div class="m-lab">云端用量 API <span>按月登记费用</span></div>
+          <div class="m-lab">云端用量 API <span>手工登记的固定月费，与下面「订阅登记」性质相同</span></div>
+          <div class="key-empty-note">
+            这里只加「固定月费」，不参与按 token 计费。<b>火山方舟的用量已自动采集</b>，若只是为了标记已接入，金额填 0 即可，避免重复计费。
+          </div>
           <div id="mCloud" data-set="cloud"></div>
           <button class="addrow" type="button" data-add="cloud">+ 添加 API</button>
         </div>
         <div class="m-sec">
-          <div class="m-lab">订阅登记 <span>桌面端 / 会员固定月费</span></div>
+          <div class="m-lab">订阅登记 <span>固定月费；接口或 CC Switch 能查到的不需要手填</span></div>
+          <div class="key-empty-note">
+            标「接口自动识别」或「CC Switch 读取」的行已自动计入，<b>不要再手填一遍</b>。接口能查到套餐价格的平台会自动出现在这里。
+          </div>
           <div id="mSubs" data-set="subs"></div>
           <button class="addrow" type="button" data-add="subs">+ 添加订阅</button>
         </div>
@@ -1095,7 +1101,10 @@ function loadSettingsFromD(){
   settings={
     models:(s.models||[]).map(function(m){return {n:String(m.name),i:String(m.inputCny),o:String(m.outputCny),c:String(m.cacheReadCny)}}),
     cloud:(s.cloudApis||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny)}}),
-    subs:(s.subscriptions||[]).map(function(m){return {n:String(m.name),p:String(m.monthlyCny),auto:!!m.autoDetected}}),
+    // origin: 'api' / 'ccswitch' 都算自动来的，不允许手改（改了就重复计费）
+    subs:(s.subscriptions||[]).map(function(m){
+      return {n:String(m.name),p:String(m.monthlyCny),origin:m.origin||'manual'};
+    }),
     budget:s.monthlyBudgetCny==null?"":String(s.monthlyBudgetCny),
     autoCompact:(s.autoCompact)||{enabled:false},
     // 每条：{id, displayName, masked, keyUrl, value}
@@ -1130,27 +1139,58 @@ function renderKeyRows(){
 }
 
 /* 自定义平台：id 由名称生成，重复则拒绝 */
+/* 自定义平台：展开一个内联表单。
+   原来用 prompt() 逐项追问，但 Tauri WebView 常静默拦截 prompt，
+   表现就是「点了没反应」——没有对话框、没有报错、什么都没有。
+   改成内联表单，看得见、能取消、也不会被拦截。 */
 function addCustomEndpoint(){
   if(!settings)return;
-  var name=prompt("平台名称（如「某某云」）");
-  if(!name||!name.trim())return;
-  name=name.trim();
-  var id=name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-  if(!id){alert("名称里至少要有英文字母或数字，用来做标识");return;}
-  if(settings.keys.some(function(k){return k.id===id})){
-    alert("已经有同名平台了（"+id+"）");return;
-  }
-  var endpoint=prompt("余额接口地址（https:// 开头）");
-  if(!endpoint||!/^https:\/\//.test(endpoint.trim())){alert("需要 https:// 开头的完整地址");return;}
-  var path=prompt("金额字段路径（如 data.balance，支持数组下标 a.b[0].c）");
-  if(!path||!path.trim())return;
-  var auth=prompt("鉴权方式：bearer（默认）/ raw / x-api-key","bearer");
-  auth=(auth||"bearer").trim();
-  if(["bearer","raw","x-api-key"].indexOf(auth)<0){alert("只能是 bearer / raw / x-api-key");return;}
-  // 暂存到 settings.keys 等待用户填 key，同时记录端点信息供保存
-  settings.keys.push({id:id,displayName:name,masked:null,keyUrl:"",value:"",_custom:{id:id,displayName:name,endpoint:endpoint.trim(),auth:auth,amountPath:path.trim()}});
-  renderKeyRows();
-  $("#mKeyResult").innerHTML='<div class="kr-line"><span class="kr-ok">已添加 '+esc(name)+'</span><span>填入 key 后点「测试连接」</span></div>';
+  var box=$("#mKeyResult");
+  if(!box)return;
+  box.innerHTML =
+    '<div class="key-custom">'+
+      '<input id="cxName" placeholder="平台名称，如「某某云」" aria-label="平台名称">'+
+      '<input id="cxEndpoint" placeholder="余额接口 https://..." aria-label="接口地址">'+
+      '<input id="cxPath" placeholder="金额字段路径，如 data.balance" aria-label="字段路径">'+
+      '<select id="cxAuth" aria-label="鉴权方式" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px;color:var(--fg)">'+
+        '<option value="bearer">Authorization: Bearer（多数平台）</option>'+
+        '<option value="raw">Authorization: 直接放 key</option>'+
+        '<option value="x-api-key">x-api-key</option>'+
+      '</select>'+
+    '</div>'+
+    '<div class="key-actions">'+
+      '<button class="addrow" type="button" id="cxOk">确定添加</button>'+
+      '<button class="addrow" type="button" id="cxCancel">取消</button>'+
+    '</div>'+
+    '<div id="cxHint" class="kr-line" style="color:var(--muted)">填完点「确定添加」，然后给这一行填入 API Key 再点「测试连接」</div>';
+  $("#cxCancel").addEventListener("click",function(){box.innerHTML="";});
+  $("#cxOk").addEventListener("click",function(){
+    var name=($("#cxName").value||"").trim();
+    var endpoint=($("#cxEndpoint").value||"").trim();
+    var path=($("#cxPath").value||"").trim();
+    var auth=$("#cxAuth").value;
+    var hint=$("#cxHint");
+    function bad(msg){hint.innerHTML='<span class="kr-bad">'+esc(msg)+'</span>';}
+    if(!name)return bad("请填平台名称");
+    // 纯中文名以前会被替换成空字符串 → id 为空 → 直接返回，什么都不发生。
+    // 中文平台名很常见，不能因此拒绝：ASCII 名转 slug，非 ASCII 名用
+    // 稳定哈希兜底，保证同一个名字永远得到同一个 id。
+    var id=name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    if(!id){
+      var h=0;
+      for(var ci=0;ci<name.length;ci++){h=((h<<5)-h+name.charCodeAt(ci))|0;}
+      id="custom-"+(h>>>0).toString(36);
+    }
+    if(settings.keys.some(function(k){return k.id===id}))return bad("已经有同名平台了（"+id+"）");
+    if(!/^https:\/\//.test(endpoint))return bad("接口地址要 https:// 开头");
+    if(!path)return bad("请填金额字段路径");
+    settings.keys.push({
+      id:id, displayName:name, masked:null, keyUrl:"", value:"",
+      _custom:{id:id,displayName:name,endpoint:endpoint,auth:auth,amountPath:path}
+    });
+    renderKeyRows();
+    box.innerHTML='<div class="kr-line"><span class="kr-ok">已添加 '+esc(name)+'</span><span>在列表里填入 API Key，再点「测试连接」</span></div>';
+  });
 }
 
 /* 测试连接：只测有 key 的（新填的或已存的） */
@@ -1159,15 +1199,30 @@ async function testKeys(){
   if(!box)return;
   box.innerHTML='<span style="color:var(--muted)">测试中…</span>';
   try{
-    var r=await fetch("/api/quota/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({keys:collectKeys()})});
-    var d=await r.json();
+    // collectKeys() 返回 {keys:{...}, customs:[...]}，只把 keys 传过去。
+    // 之前整个对象塞进 {keys: ...}，服务端取 keys?.[id] 永远是 undefined。
+    var collected=collectKeys();
+    var payload=JSON.stringify({keys:collected.keys,customs:collected.customs});
+    var d;
+    if(inTauri()){
+      // 桌面端没有本地 serve，fetch('/api/...') 必然失败。
+      // 走 Tauri 命令，内部再喂给 CLI 的 quota-test（key 走 stdin）。
+      var raw=await window.__TAURI__.core.invoke("quota_test",{payload:payload});
+      d=JSON.parse(raw);
+    }else{
+      var r=await fetch("/api/quota/test",{method:"POST",headers:{"Content-Type":"application/json"},body:payload});
+      d=await r.json();
+    }
     if(!d||!d.results){box.innerHTML='<span class="kr-bad">测试失败：接口无响应</span>';return;}
     box.innerHTML=d.results.map(function(x){
       return '<div class="kr-line"><span class="'+(x.ok?"kr-ok":"kr-bad")+'">'+(x.ok?"✓":"✗")+' '+esc(x.displayName)+'</span><span>'+
         (x.ok? esc(x.detail) : esc(x.error||"失败")) +'</span></div>';
     }).join("");
   }catch(e){
-    box.innerHTML='<span class="kr-bad">测试失败：'+(e&&e.message?esc(e.message):"网络错误")+'</span><span style="color:var(--muted)">（需要本地 serve 在跑，桌面端点「打开看板」自带）</span>';
+    var why = e && (e.message || e.toString) ? (e.message||String(e)) : "未知错误";
+    box.innerHTML='<span class="kr-bad">测试失败：'+esc(why)+'</span>'+
+      (inTauri()?'<span style="color:var(--muted)">（需要安装 token-pilot 命令行：npm i -g @anthonyhan/token-pilot）</span>'
+               :'<span style="color:var(--muted)">（需要本地 serve 在跑：token-pilot serve）</span>');
   }
 }
 
@@ -1185,20 +1240,27 @@ function collectKeys(){
 function renderSet(){
   $("#mModels").innerHTML=settings.models.map(function(r,i){return '<div class="m-row r4"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="模型名" placeholder="模型名，如 glm-5.3"><input data-k="i" data-i="'+i+'" value="'+esc(r.i)+'" aria-label="输入单价"><input data-k="o" data-i="'+i+'" value="'+esc(r.o)+'" aria-label="输出单价"><input data-k="c" data-i="'+i+'" value="'+esc(r.c)+'" aria-label="缓存读单价"><button class="delrow" type="button" data-del="models" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
   $("#mCloud").innerHTML=settings.cloud.map(function(r,i){return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费用"><button class="delrow" type="button" data-del="cloud" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
+  var ORIGIN_TAG={api:'接口自动识别',ccswitch:'CC Switch 读取',manual:''};
+  var ORIGIN_TIP={api:'来自平台接口，已计入当月固定费用；手填会重复计费，故不可编辑',
+                  ccswitch:'来自本机 CC Switch 配置，自动读取；如需修改请到 CC Switch 里改'};
   $("#mSubs").innerHTML=settings.subs.map(function(r,i){
-    if(r.auto){
-      // 自动识别项：只读展示，禁止编辑和删除。
-      // 允许改动会导致「接口查到一份 + 手填一份」重复计费。
-      return '<div class="m-row r2 sub-auto"><span class="sub-auto-name" title="来自平台接口，已计入当月固定费用">'+esc(r.n)+'</span>'+
+    if(r.origin&&r.origin!=='manual'){
+      // 自动来的（接口或 CC Switch）：只读，禁止编辑和删除。
+      // 允许改动会导致「自动拿到一份 + 手填一份」重复计费。
+      return '<div class="m-row r2 sub-auto"><span class="sub-auto-name" title="'+esc(ORIGIN_TIP[r.origin]||'')+'">'+esc(r.n)+'</span>'+
         '<span class="sub-auto-amt">¥'+esc(r.p)+'</span>'+
-        '<span class="sub-auto-tag" title="月费由平台接口提供，无需手填">已自动识别</span></div>';
+        '<span class="sub-auto-tag">'+esc(ORIGIN_TAG[r.origin]||'自动')+'</span></div>';
     }
     return '<div class="m-row r2"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="名称" placeholder="名称"><input data-k="p" data-i="'+i+'" value="'+esc(r.p)+'" aria-label="月费"><button class="delrow" type="button" data-del="subs" data-i="'+i+'" aria-label="删除此行">×</button></div>';
   }).join("");
   renderKeyRows();
   $("#mBudget").value=settings.budget;
   $("#mAutoCompact").checked=!!(settings.autoCompact&&settings.autoCompact.enabled);
-  $("#mCompactK").value=String(Math.round((settings.autoCompact&&settings.autoCompact.thresholdTokens)||100000/1000)||100);
+  // 输入框单位是「千 tokens」。原文写作 (x || 100000/1000) || 100，
+  // 运算符优先级导致 x 存在时直接把原始 token 数（如 150000）塞进输入框，
+  // 用户一保存就变成 150000 * 1000 = 1.5 亿，阈值等于永不触发。
+  var thTokens = (settings.autoCompact && settings.autoCompact.thresholdTokens) || 100000;
+  $("#mCompactK").value = String(Math.round(thTokens / 1000));
   $("#mApplyCc").checked=!!(settings.autoCompact&&settings.autoCompact.applyClaudeCode);
   var rtkOn=!!(D&&D.settings&&D.settings.rtkInstalled);
   var rtkSrc=(D&&D.settings&&D.settings.rtkSource)||"none";
@@ -1245,8 +1307,14 @@ modal.addEventListener("click",function(e){
 $("#mAddCustom").addEventListener("click",addCustomEndpoint);
 $("#mTestKeys").addEventListener("click",testKeys);
 $$(".addrow").forEach(function(b){
+  // 只处理带 data-add 的行内「+ 添加」按钮。
+  // 没有这层判断的话，同样用 .addrow 样式的「添加自定义平台」「测试连接」
+  // 也会走进来，settings[undefined].push 直接抛 TypeError，
+  // 看起来就是「点了没反应」。
+  if(!b.dataset.add)return;
   b.addEventListener("click",function(){
     var k=b.dataset.add;
+    if(!settings[k])return;
     settings[k].push(k==="models"?{n:"",i:"",o:"",c:""}:{n:"",p:""});
     renderSet();
   });
@@ -1263,7 +1331,9 @@ $("#settingsSave").addEventListener("click",function(){
   settings.cloud.forEach(function(r){if(r.n)payload.cloudApis.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
   // 自动识别的条目由接口提供，不写回手填列表——写回去下次就会被当成手填项，
   // 再叠加接口识别就重复了
-  settings.subs.forEach(function(r){if(r.n&&!r.auto)payload.subscriptions.push({name:r.n,monthlyCny:parseFloat(r.p)||0})});
+  settings.subs.forEach(function(r){
+    if(r.n&&(!r.origin||r.origin==='manual'))payload.subscriptions.push({name:r.n,monthlyCny:parseFloat(r.p)||0});
+  });
   var b=parseFloat(settings.budget);
   payload.monthlyBudgetCny=isFinite(b)?b:null;
   // API Key：只发本次新填的 + 明确要清除的，不把已有 key 回传

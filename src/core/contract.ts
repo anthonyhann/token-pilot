@@ -125,8 +125,15 @@ export interface SettingsData {
   subscriptions: {
     name: string;
     monthlyCny: number;
-    autoDetected?: boolean;
-    /** 自动识别的来源平台 id，用于和 quota 板块对应 */
+    /**
+     * 这条数据从哪来。界面上如实标注，用户才知道该不该信、能不能改。
+     *   api       —— 平台接口查到，最可信
+     *   ccswitch  —— 本机 CC Switch 里的配置，自动读取
+     *   manual    —— 用户手填
+     * 有 origin 就表示「自动来的」，此时前端不允许编辑（否则会重复计费）。
+     */
+    origin?: 'api' | 'ccswitch' | 'manual';
+    /** 自动来源的平台 id，用于和「订阅额度与余额」板块对应 */
     providerId?: string;
   }[];
   /**

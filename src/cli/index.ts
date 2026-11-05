@@ -303,6 +303,26 @@ async function main() {
     console.log(formatQuota(snap));
     return;
   }
+  // 测试连接：桌面端（无 serve）靠这个命令跑，输出 JSON 给前端渲染。
+  // 参数从 stdin 读 {keys, customs}，避免把 key 放进命令行参数——
+  // 那样会出现在 ps 输出和历史里。
+  if (cmd === 'quota-test') {
+    const chunks: Buffer[] = [];
+    for await (const c of process.stdin) chunks.push(c as Buffer);
+    let payload: { keys?: Record<string, string>; customs?: unknown[] } = {};
+    try {
+      payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    } catch {
+      /* 空输入按空对象处理 */
+    }
+    const { testEndpoints } = await import('../core/quota/providers/declarative.js');
+    const results = await testEndpoints(
+      payload.keys ?? {},
+      Array.isArray(payload.customs) ? (payload.customs as Parameters<typeof testEndpoints>[1]) : [],
+    );
+    console.log(JSON.stringify({ results }));
+    return;
+  }
   if (cmd === 'doctor') {
     const { runDoctor, formatDoctor } = await import('../core/doctor.js');
     const report = await runDoctor();
