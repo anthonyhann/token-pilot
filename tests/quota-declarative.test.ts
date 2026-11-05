@@ -191,3 +191,24 @@ test('OpenRouter 在目录里已标记 verified 且使用相减', () => {
   assert.notEqual(or!.verified, null, '已用真实 key 验证，应标记 verified');
   assert.equal(or!.amount.subtractPath, 'data.total_usage', '必须减去 total_usage');
 });
+
+// ── 鉴权方式（实测过的坑） ──
+
+test('MiniMax 必须用 bearer，裸 Authorization 会 1004', () => {
+  const mm = BALANCE_CATALOG.find((s) => s.id === 'minimax');
+  assert.ok(mm, '缺 MiniMax 条目');
+  // 实测 2026-11-05：auth:'raw' 时返回
+  // {"base_resp":{"status_code":1004,"status_msg":"login fail: Please carry the
+  //   API secret key in the 'Authorization' field"}}——看着像 key 无效，
+  // 其实是鉴权头格式错了。这类误诊最费时间，锁死。
+  assert.equal(mm!.auth, 'bearer', 'MiniMax 要用 Bearer');
+});
+
+test('只有明确需要裸 key 的平台才用 raw', () => {
+  // raw 是少数派：目前没有任何已验证平台需要它。
+  // 若将来要加，必须像 MiniMax 一样用真实 key 实测过再写。
+  const rawOnes = BALANCE_CATALOG.filter((s) => s.auth === 'raw');
+  for (const s of rawOnes) {
+    assert.equal(s.verified, null, `${s.id} 用 raw 且标称已验证，需复核鉴权头格式`);
+  }
+});

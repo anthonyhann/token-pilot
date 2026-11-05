@@ -116,13 +116,17 @@ export const BALANCE_CATALOG: BalanceApiSpec[] = [
     id: 'minimax',
     displayName: 'MiniMax',
     endpoint: 'https://api.minimaxi.com/v1/token_plan/remains',
-    auth: 'raw',
+    // 实测（2026-11-05，真实 key）：必须 Bearer，裸 key 会报 1004
+    // 「login fail: Please carry the API secret key in the 'Authorization' field」。
+    // 原先这里写成 raw 是错的。
+    auth: 'bearer',
     // 这是 Token Plan（预付包），不是现金余额；由现有 minimax provider 处理
     amount: { path: 'model_remains[0].current_interval_total_count', kind: 'remaining' },
     currency: 'CNY',
     keyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     verified: null,
-    note: 'Token Plan 不是现金余额，走独立解析器',
+    note:
+      'Token Plan 预付费包（非现金余额）。查余额 /v1/account/balance 需要 admin key，普通 key 报 403 token_type_mismatch；无订阅时该接口返回 2062 no active token plan subscription',
   },
 ];
 
