@@ -116,7 +116,19 @@ export interface SettingsData {
   models: SettingsModel[];
   overrideNames: string[];   // 当前被人工覆写的模型名（弹窗 diff 保存用）
   cloudApis: { name: string; monthlyCny: number }[];
-  subscriptions: { name: string; monthlyCny: number }[];
+  /**
+   * 订阅登记。
+   *
+   * autoDetected=true 的条目来自平台接口（Token Plan 等），已计入当月固定费用，
+   * 前端要显示「已自动识别，无需手填」并禁止编辑——否则用户手填一遍会算两次钱。
+   */
+  subscriptions: {
+    name: string;
+    monthlyCny: number;
+    autoDetected?: boolean;
+    /** 自动识别的来源平台 id，用于和 quota 板块对应 */
+    providerId?: string;
+  }[];
   /**
    * 各平台的 API Key 配置状态。
    *
