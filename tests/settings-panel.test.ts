@@ -99,3 +99,30 @@ test('保存订阅时跳过自动来源，避免写回后重复计费', () => {
     '保存时应判断 origin，只把 manual 的写回 config',
   );
 });
+
+// ── 0.4.10 修的三个 bug ──
+
+test('删除平台时清掉 masked 标记，行才会从列表移除', () => {
+  // 之前只清 value 不清 masked，而 renderKeyRows 靠 masked 判断「已添加」，
+  // 导致点了 × 行还在
+  const fn = dash.match(/\[data-keyclear\][\s\S]*?\}\);/);
+  assert.ok(fn, '找不到删除处理');
+  assert.match(fn![0], /k\.masked\s*=\s*null/, '删除时必须清 masked');
+  assert.match(fn![0], /k\.added\s*=\s*false/, '删除时必须移除 added');
+});
+
+test('保存提示常驻，不一闪而过', () => {
+  // 之前 setTimeout 1600ms 就消失，用户分不清存没存上
+  const fn = dash.match(/function showHint\([^)]*\)\{[\s\S]*?\n  \}/);
+  assert.ok(fn, '找不到 showHint');
+  assert.match(fn![0], /duration>0/, '常驻支持（duration=0 时不自动消失）');
+  assert.match(fn![0], /classList\.add\(ok===false\?"err":"ok"\)/, '要区分成功和失败');
+});
+
+test('桌面端 quota_test 识别旧版 CLI 不报 JSON 解析错', () => {
+  // 旧版 CLI 没有 quota-test 子命令，会输出「用法：...」纯文本，
+  // 第一个字符「用」让 JSON.parse 崩成 Unrecognized token
+  const rs = readFileSync(resolve(ROOT, 'menubar/src-tauri/src/main.rs'), 'utf8');
+  assert.match(rs, /starts_with\('\{'\)/, '要识别非 JSON 输出');
+  assert.match(rs, /命令行版本过旧/, '要给升级提示');
+});
