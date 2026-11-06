@@ -15,16 +15,12 @@
 // 之所以优先做这个而不是「等用户配 key」：OpenCode 的凭证本来就在
 // ~/.local/share/opencode/auth.json，不需要用户做任何事。
 
-import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import type { ProviderQuota, RateWindow } from '../types.js';
 import { fromConfig, fromCcSwitch } from '../credentials.js';
-import { explainQuotaError } from '../errors.js';
-
-const execFileP = promisify(execFile);
+import { httpGetJson } from '../http.js';
 
 const USAGE_URL = 'https://opencode.ai/zen/go/v1/usage';
 
@@ -70,29 +66,6 @@ async function resolveOpencodeKey(): Promise<{ key: string; detail: string } | n
   return null;
 }
 
-async function httpGetJson(url: string, key: string): Promise<unknown> {
-  const script = `
-import json, sys, urllib.request
-req = urllib.request.Request(sys.argv[1], headers={
-    'Authorization': 'Bearer ' + sys.argv[2],
-    # 服务端会按 User-Agent 拦请求：不带 UA 时 urllib 默认的 Python-urllib/x.y 会 403
-    'User-Agent': 'token-pilot',
-    'Accept': 'application/json',
-})
-try:
-    with urllib.request.urlopen(req, timeout=15) as r:
-        print(r.read().decode())
-except Exception as e:
-    print(json.dumps({'__error': str(e)}))
-`;
-  try {
-    const { stdout } = await execFileP('python3', ['-c', script, url, key], { timeout: 20_000 });
-    return JSON.parse(stdout);
-  } catch (e) {
-    return { __error: String(e).slice(0, 150) };
-  }
-}
-
 export async function fetchOpencodeQuota(): Promise<ProviderQuota> {
   const base: ProviderQuota = {
     id: 'opencode',
@@ -107,17 +80,17 @@ export async function fetchOpencodeQuota(): Promise<ProviderQuota> {
     return { ...base, error: '未找到 OpenCode 凭据（需先在 OpenCode 里登录，或在设置里填 key）' };
   }
 
-  const res = (await httpGetJson(USAGE_URL, cred.key)) as OpencodeUsageResponse & {
-    __error?: string;
-  };
-  if (res.__error) {
-    const hint = /401/.test(res.__error)
-      ? '凭证无效或已过期，请在 OpenCode 里重新登录'
-      : /403/.test(res.__error)
-        ? '接口拒绝访问（403）——若刚登录过请重试'
-        : explainQuotaError(res.__error);
+  const r = await httpGetJson(USAGE_URL, { Authorization: `Bearer ${cred.key}` });
+  if (!r.ok) {
+    const hint =
+      r.status === 401
+        ? '凭证无效或已过期，请在 OpenCode 里重新登录'
+        : r.status === 403
+          ? '接口拒绝访问（403）——若刚登录过请重试'
+          : r.error;
     return { ...base, error: hint };
   }
+  const res = r.data as OpencodeUsageResponse;
   if (!res.usage) {
     return { ...base, error: '接口返回里没有 usage 字段' };
   }

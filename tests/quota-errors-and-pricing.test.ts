@@ -41,6 +41,16 @@ test('HTTP 状态码错误分类正确', () => {
   assert.match(explainQuotaError('HTTP Error 502: Bad Gateway'), /服务端/);
 });
 
+test('node fetch 的错误形态同样翻译（http.ts 会把 cause 拼进来）', () => {
+  // DNS 失败：fetch 抛 TypeError，真原因在 cause 里
+  const dns = explainQuotaError('TypeError: fetch failed Error: getaddrinfo ENOTFOUND api.deepseek.com');
+  assert.match(dns, /域名解析失败/, `node 的 DNS 报错没被认出：${dns}`);
+  // 超时：AbortSignal.timeout 抛 TimeoutError
+  assert.match(explainQuotaError('TimeoutError: The operation timed out'), /网络请求失败/);
+  // 拒连：ECONNREFUSED 形态
+  assert.match(explainQuotaError('TypeError: fetch failed Error: connect ECONNREFUSED 127.0.0.1:443'), /网络请求失败/);
+});
+
 test('不认识的错误原样返回，不编造提示', () => {
   const raw = 'totally unknown xyz';
   assert.equal(explainQuotaError(raw), raw);

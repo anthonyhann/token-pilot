@@ -11,7 +11,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { explainQuotaError } from '../errors.js';
+import { noKeyMessage } from '../errors.js';
+import { httpGetJson, type HttpJsonResult } from '../http.js';
 import { resolveKey } from '../credentials.js';
 import type { ProviderQuota } from '../types.js';
 import {
@@ -92,58 +93,17 @@ function customToSpec(c: CustomEndpoint): BalanceApiSpec {
   };
 }
 
-/** 用 python3 发 GET 请求（与项目其它网络调用保持一致，不引入 npm 依赖） */
-function buildScript(spec: BalanceApiSpec): string {
-  const headerExpr =
-    spec.auth === 'x-api-key'
-      ? `'x-api-key': sys.argv[2]`
-      : spec.auth === 'raw'
-        ? `'Authorization': sys.argv[2]`
-        : `'Authorization': 'Bearer ' + sys.argv[2]`;
-  const extra = spec.headers
-    ? Object.entries(spec.headers)
-        .map(([k, v]) => `    ${JSON.stringify(k)}: ${JSON.stringify(v)},`)
-        .join('\n')
-    : '';
-  return `
-import json, sys, urllib.request
-hdr = {
-    'User-Agent': 'token-pilot',
-    'Accept': 'application/json',
-    ${headerExpr},
-${extra}
-}
-req = urllib.request.Request(sys.argv[1], headers=hdr)
-try:
-    with urllib.request.urlopen(req, timeout=15) as r:
-        print(r.read().decode())
-except Exception as e:
-    print(json.dumps({'__error': str(e)}))
-`;
+/** 按 spec 的鉴权形态组装请求头 */
+function authHeaders(spec: BalanceApiSpec, key: string): Record<string, string> {
+  const h: Record<string, string> = { ...(spec.headers ?? {}) };
+  if (spec.auth === 'x-api-key') h['x-api-key'] = key;
+  else if (spec.auth === 'raw') h['Authorization'] = key;
+  else h['Authorization'] = `Bearer ${key}`;
+  return h;
 }
 
-interface HttpResult {
-  ok: boolean;
-  data?: unknown;
-  error?: string;
-}
-
-async function httpGet(spec: BalanceApiSpec, key: string): Promise<HttpResult> {
-  const { execFile } = await import('node:child_process');
-  const { promisify } = await import('node:util');
-  const execFileP = promisify(execFile);
-  try {
-    const { stdout } = await execFileP(
-      'python3',
-      ['-c', buildScript(spec), spec.endpoint, key],
-      { timeout: 20_000 },
-    );
-    const parsed = JSON.parse(stdout) as { __error?: string };
-    if (parsed.__error) return { ok: false, error: explainQuotaError(parsed.__error) };
-    return { ok: true, data: parsed };
-  } catch (e) {
-    return { ok: false, error: explainQuotaError(String(e).slice(0, 150)) };
-  }
+function httpGet(spec: BalanceApiSpec, key: string): Promise<HttpJsonResult> {
+  return httpGetJson(spec.endpoint, authHeaders(spec, key));
 }
 
 /**
@@ -180,10 +140,7 @@ export async function fetchDeclarativeBalance(
     ? { key: overrideKey, origin: 'config' as const, detail: '本次输入的 key' }
     : await resolveKey(spec.id, undefined, spec.scenario);
   if (!cred) {
-    return {
-      ...base,
-      error: `未配置 API Key（在设置里填，或装了 CC Switch 可自动读取）${spec.keyUrl ? `；申请地址：${spec.keyUrl}` : ''}`,
-    };
+    return { ...base, error: noKeyMessage(spec.keyUrl || undefined) };
   }
 
   const res = await httpGet(spec, cred.key);

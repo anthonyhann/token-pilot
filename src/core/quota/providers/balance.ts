@@ -1,102 +1,20 @@
-// 标准余额接口 provider（DeepSeek / Moonshot / 智谱 GLM）
+// API 型 provider：智谱 GLM 额度窗口 / MiniMax Token Plan
 //
-// 这三个平台的共性是：提供 HTTP 接口查余额，需要用户在设置里填 key 或复用 CC Switch。
-// 与火山的 subprocess 模式、OpenCode 的固定端点不同，这里用一张描述表驱动，
-// 加新平台只需要在 BALANCE_APIS 里加一条，不改逻辑。
+// 这两个平台的返回结构不是「一个余额数字」能表达的（GLM 是多额度窗口，
+// MiniMax 是 token 套餐剩余量），放不进 catalog 的声明式模型，所以各保留
+// 一个专用函数。标准余额平台（DeepSeek / Moonshot / OpenRouter）都在
+// catalog.ts + declarative.ts，别往这里加。
 //
 // 实测确认的返回结构：
-//   DeepSeek  GET /user/balance
-//     {"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"11.40",...}]}
 //   智谱 GLM  GET /api/monitor/usage/quota/limit
 //     {"code":200,"data":{"limits":[{"type":"CREDIT_LIMIT","usage":2000,"remaining":2000,
 //       "percentage":0,"nextResetTime":1793847267998}],"level":"lite"}}
 //     （这个其实是「额度」不是现金余额，所以走 RateWindow 而不是 Balance）
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import type { ProviderQuota, RateWindow } from '../types.js';
 import { resolveKey } from '../credentials.js';
-import { explainQuotaError } from '../errors.js';
-
-const execFileP = promisify(execFile);
-
-async function httpJson(url: string, key: string, authHeader: 'bearer' | 'raw' = 'bearer'): Promise<
-  { ok: true; data: unknown } | { ok: false; error: string }
-> {
-  const script = `
-import json, sys, urllib.request
-hdr = {
-    'User-Agent': 'token-pilot',
-    'Accept': 'application/json',
-    'Authorization': ('Bearer ' if sys.argv[3] == 'bearer' else '') + sys.argv[2],
-}
-req = urllib.request.Request(sys.argv[1], headers=hdr)
-try:
-    with urllib.request.urlopen(req, timeout=15) as r:
-        print(r.read().decode())
-except Exception as e:
-    print(json.dumps({'__error': str(e)}))
-`;
-  try {
-    const { stdout } = await execFileP(
-      'python3',
-      ['-c', script, url, key, authHeader],
-      { timeout: 20_000 },
-    );
-    const d = JSON.parse(stdout) as { __error?: string };
-    // 底层异常（Python urllib 的原始报错）翻译成人话，别把 traceback 甩给用户
-    if (d.__error) return { ok: false, error: explainQuotaError(d.__error) };
-    return { ok: true, data: d };
-  } catch (e) {
-    return { ok: false, error: explainQuotaError(String(e).slice(0, 150)) };
-  }
-}
-
-/**
- * DeepSeek：现金余额
- *
- * @deprecated 已迁到声明式 provider（catalog.ts 的 deepseek 条目 +
- * declarative.ts 的引擎）。保留此函数只为兼容旧调用与做对照测试，
- * 新平台请往 catalog 里加，不要再写专用函数。
- */
-export async function fetchDeepseekBalance(): Promise<ProviderQuota> {
-  const base: ProviderQuota = {
-    id: 'deepseek',
-    displayName: 'DeepSeek',
-    source: 'api',
-    ok: false,
-    fetchedAt: Date.now(),
-  };
-  const cred = await resolveKey('deepseek', 'deepseek');
-  if (!cred) {
-    return { ...base, error: '未配置 API Key（看板设置里填，或装了 CC Switch 可自动读取）' };
-  }
-
-  const r = await httpJson('https://api.deepseek.com/user/balance', cred.key);
-  if (!r.ok) {
-    return {
-      ...base,
-      error: /401|403/.test(r.error) ? 'API Key 无效或已过期' : r.error,
-    };
-  }
-
-  const d = r.data as {
-    is_available?: boolean;
-    balance_infos?: { currency?: string; total_balance?: string }[];
-  };
-  const info = (d.balance_infos ?? [])[0];
-  const amount = info?.total_balance ? Number(info.total_balance) : NaN;
-  if (!Number.isFinite(amount)) {
-    return { ...base, error: '接口没有返回可解析的余额' };
-  }
-
-  return {
-    ...base,
-    ok: true,
-    balance: { amount, currency: (info?.currency === 'USD' ? 'USD' : 'CNY') as 'CNY' | 'USD' },
-    note: d.is_available === false ? '账户当前不可用（可能欠费）' : cred.detail,
-  };
-}
+import { noKeyMessage } from '../errors.js';
+import { httpGetJson } from '../http.js';
 
 /** 智谱 GLM：额度（不是现金余额，是积分制套餐） */
 export async function fetchGlmQuota(): Promise<ProviderQuota> {
@@ -109,12 +27,14 @@ export async function fetchGlmQuota(): Promise<ProviderQuota> {
   };
   const cred = await resolveKey('glm', 'GLM');
   if (!cred) {
-    return { ...base, error: '未配置 API Key（看板设置里填，或装了 CC Switch 可自动读取）' };
+    return { ...base, error: noKeyMessage() };
   }
 
-  const r = await httpJson('https://open.bigmodel.cn/api/monitor/usage/quota/limit', cred.key);
+  const r = await httpGetJson('https://open.bigmodel.cn/api/monitor/usage/quota/limit', {
+    Authorization: `Bearer ${cred.key}`,
+  });
   if (!r.ok) {
-    return { ...base, error: /401|403/.test(r.error) ? 'API Key 无效或已过期' : r.error };
+    return { ...base, error: r.error };
   }
 
   const d = r.data as {
@@ -169,12 +89,14 @@ export async function fetchMinimaxTokenPlan(): Promise<ProviderQuota> {
   };
   const cred = await resolveKey('minimax', 'minimax');
   if (!cred) {
-    return { ...base, error: '未配置 API Key（看板设置里填，或装了 CC Switch 可自动读取）' };
+    return { ...base, error: noKeyMessage() };
   }
 
-  const r = await httpJson('https://api.minimaxi.com/v1/token_plan/remains', cred.key);
+  const r = await httpGetJson('https://api.minimaxi.com/v1/token_plan/remains', {
+    Authorization: `Bearer ${cred.key}`,
+  });
   if (!r.ok) {
-    return { ...base, error: /401|403/.test(r.error) ? 'API Key 无效或已过期' : r.error };
+    return { ...base, error: r.error };
   }
 
   const d = r.data as {

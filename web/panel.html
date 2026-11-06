@@ -731,19 +731,43 @@ body.closed .reopen:hover{color:var(--fg)}
        windows   → 订阅额度（会重置）
        tokenPlan → 预付 token 包
        balance   → 现金余额
-     三者经济含义不同，不能合并算。 */
-  var QSRC={api:"官方接口",cli:"官方 CLI",computed:"本地计算",manual:"手动登记"};
-  function qResets(iso){
-    if(!iso)return "";
-    var t=Date.parse(iso);if(isNaN(t))return "";
-    var ms=t-Date.now();
-    if(ms<=0)return "即将重置";
-    var m=Math.floor(ms/60000);
-    if(m<60)return m+" 分钟后";
-    var h=Math.floor(m/60);
-    if(h<24)return h+" 小时后";
-    return Math.floor(h/24)+" 天后";
-  }
+     三者经济含义不同，不能合并算。
+     阈值/文案/格式化与看板同源，来自下面的 @inline 共享块。 */
+// @inline quota-shared:start（内容由 scripts/sync-web-assets.js 从 web/quota-shared.js 内联，勿手改）
+/* ───────── 订阅额度与余额：看板与面板共用的口径（唯一编辑点）─────────
+ *
+ * 为什么不做成 <script src> 外部文件：两个页面都要支持 file:// 直开
+ * （看板内嵌落盘版、面板 Tauri 打包版），单文件自包含是硬约束，
+ * 外部 JS 在落盘场景会 404。所以本文件由 scripts/sync-web-assets.js
+ * 内联进 web/dashboard.html 与 web/panel.html 的 @inline 标记区，
+ * 改这里之后跑 npm run sync:assets（CI 的 verify:assets 会查是否新鲜）。
+ *
+ * 这里只放「口径」不放排版：两个页面的排版刻意不同
+ * （看板分组卡片 / 面板 480px 紧凑单行），但阈值、文案、格式化规则
+ * 必须一致——历史 bug 就是改了看板忘了面板。
+ */
+
+/* 数据来源徽标文案 */
+var TPQ_SOURCE_LABEL={api:'官方接口',cli:'官方 CLI',computed:'本地计算',manual:'手动登记'};
+/* 现金余额低于此值（元）标红提醒 */
+var TPQ_LOW_BALANCE=20;
+/* 进度条阈值：>=90 危险 / >=70 预警。看板用颜色值、面板用 class 名，阈值必须同源 */
+function tpqClampPct(p){return Math.max(0,Math.min(100,+p||0))}
+function tpqBarColor(pct){if(pct>=90)return 'var(--warn)';if(pct>=70)return 'color-mix(in oklab,var(--warn) 55%,var(--pos))';return 'var(--pos)'}
+function tpqBarClass(pct){return pct>=90?'hot':(pct>=70?'mid':'')}
+/* 「还有多久重置」的人话描述 */
+function tpqResetText(iso){
+  if(!iso)return '';
+  var t=Date.parse(iso);if(isNaN(t))return '';
+  var ms=t-Date.now();
+  if(ms<=0)return '即将重置';
+  var mins=Math.floor(ms/60000);
+  if(mins<60)return mins+' 分钟后';
+  var h=Math.floor(mins/60);
+  if(h<24)return h+' 小时后';
+  return Math.floor(h/24)+' 天后';
+}
+// @inline quota-shared:end
   function qTightest(windows){
     var best=null;
     (windows||[]).forEach(function(w){
@@ -755,7 +779,7 @@ body.closed .reopen:hover{color:var(--fg)}
     return (windows||[]).map(function(w){
       return w.label+" "+(Math.round((+w.percent||0)*10)/10)+"%"+
         (w.used!=null&&w.total!=null?" ("+w.used+"/"+w.total+")":"")+
-        (w.resetsAt?" · "+qResets(w.resetsAt)+"刷新":"");
+        (w.resetsAt?" · "+tpqResetText(w.resetsAt)+"刷新":"");
     }).join("\n");
   }
   function renderQuota(){
@@ -773,7 +797,7 @@ body.closed .reopen:hover{color:var(--fg)}
       return;
     }
     var rows=provs.map(function(p){
-      var src='<span class="q-src">'+esc(QSRC[p.source]||p.source||"")+'</span>';
+      var src='<span class="q-src">'+esc(TPQ_SOURCE_LABEL[p.source]||p.source||"")+'</span>';
       var head='<div class="q-head"><span class="q-name">'+esc(p.displayName)+'</span>'+src+'</div>';
 
       if(!p.ok&&!(p.balance)){
@@ -783,7 +807,7 @@ body.closed .reopen:hover{color:var(--fg)}
       // 现金余额：直接给数额，低于 20 标红（和看板一致的口径）
       if(p.balance){
         var amt=+p.balance.amount;
-        var low=amt<20;
+        var low=amt<TPQ_LOW_BALANCE;
         return '<div class="q-prov">'+head+'<div class="q-bal">'+
           '<span class="amt'+(low?" low":"")+'">'+
             (p.balance.currency==="CNY"?"¥":"$")+amt.toFixed(2)+'</span>'+
@@ -793,8 +817,8 @@ body.closed .reopen:hover{color:var(--fg)}
       var wins=p.windows||[];
       if(wins.length){
         var t=qTightest(wins);
-        var pct=Math.max(0,Math.min(100,+t.percent||0));
-        var cls=pct>=90?"hot":(pct>=70?"mid":"");
+        var pct=tpqClampPct(t.percent);
+        var cls=tpqBarClass(pct);
         var abs=(t.used!=null&&t.total!=null)?'<span class="q-abs">'+t.used+"/"+t.total+'</span>':"";
         var more=wins.length>1?'<span class="q-abs">共 '+wins.length+' 个窗口</span>':"";
         return '<div class="q-prov" title="'+esc(qAll(wins))+'">'+head+
@@ -805,7 +829,7 @@ body.closed .reopen:hover{color:var(--fg)}
           '</div>'+
           '<div class="q-sub">'+esc(t.label)+
             (abs?" · "+abs:"")+
-            (t.resetsAt?" · "+esc(qResets(t.resetsAt))+"后刷新":"")+
+            (t.resetsAt?" · "+esc(tpqResetText(t.resetsAt))+"后刷新":"")+
             (more?" · "+more:"")+
           '</div>'+
         '</div>';
