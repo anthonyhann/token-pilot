@@ -307,13 +307,18 @@ async function main() {
   // 参数从 stdin 读 {keys, customs}，避免把 key 放进命令行参数——
   // 那样会出现在 ps 输出和历史里。
   if (cmd === 'quota-test') {
+    // 版本自检：这个子命令是 0.4.9 加的，旧版 CLI（比如 0.4.2）没有它。
+    // 旧版会走到用法提示输出「用法：...」，第一个字符是「用」，
+    // 前端 JSON.parse 直接崩成「Unrecognized token '用'」。
+    // 这里主动校验 stdin 能解析，解析不了立刻返回结构化错误，绝不混进非 JSON 输出。
     const chunks: Buffer[] = [];
     for await (const c of process.stdin) chunks.push(c as Buffer);
     let payload: { keys?: Record<string, string>; customs?: unknown[] } = {};
     try {
       payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
     } catch {
-      /* 空输入按空对象处理 */
+      console.log(JSON.stringify({ results: [], error: 'invalid-payload' }));
+      return;
     }
     const { testEndpoints } = await import('../core/quota/providers/declarative.js');
     const results = await testEndpoints(

@@ -510,7 +510,17 @@ async fn quota_test(payload: String) -> Result<String, String> {
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
-    String::from_utf8(out.stdout).map_err(|e| e.to_string())
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    // 旧版 CLI（0.4.9 之前）没有 quota-test 子命令，会输出「用法：token-pilot ...」
+    // 这类纯文本提示。第一个字符是「用」，前端 JSON.parse 直接崩成
+    // 「Unrecognized token '用'」。这里提前识别：返回不是 JSON 就转成能懂的错误。
+    if !stdout.starts_with('{') {
+        return Err(
+            "token-pilot 命令行版本过旧，缺少 quota-test 命令。请升级：npm i -g @anthonyhan/token-pilot@latest"
+                .to_string(),
+        );
+    }
+    Ok(stdout)
 }
 
 // ───────────────────────── 面板尺寸 ─────────────────────────

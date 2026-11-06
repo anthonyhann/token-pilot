@@ -409,8 +409,11 @@ footer .notes{max-width:560px}
 .opt-unit{font-size:11.5px;color:var(--muted)}
 .delrow{color:var(--muted);border:0;background:none;cursor:pointer;font-size:14px;line-height:1;padding:2px}
 .modal-foot{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid var(--gridln)}
-.saved-hint{color:var(--pos-text);font-size:12px;font-weight:700;opacity:0;transition:opacity .2s var(--ease)}
+.saved-hint{font-size:12px;font-weight:700;opacity:0;transition:opacity .2s var(--ease)}
 .saved-hint.on{opacity:1}
+.saved-hint.ok{color:var(--pos-text)}
+.saved-hint.err{color:var(--warn)}
+.saved-hint.err{color:var(--danger,var(--warn))}
 
 @media (max-width:1020px){
   .stat-grid{grid-template-columns:repeat(2,1fr)}
@@ -727,9 +730,9 @@ footer .notes{max-width:560px}
       <div class="modal-head"><h2>数据设置</h2><button class="theme-btn" id="modalClose" type="button" aria-label="关闭设置"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div class="modal-body">
         <div class="m-sec">
-          <div class="m-lab">API Key 余额查询 <span>填了就能在看板看到余额；只存本机，不上传</span></div>
+          <div class="m-lab">API Key 管理 <span>余额与订阅共用：选平台、填 key、测试、保存；只存本机，不上传</span></div>
           <div class="key-empty-note">
-            没填也能用：装了 CC Switch 会自动读取。<b>不装 CC Switch 时，这里是唯一入口。</b>
+            没填也能用：装了 CC Switch 会自动读取（标「CC Switch 读取」）。<b>不装 CC Switch 时，这里是唯一入口。</b>
           </div>
           <div id="mKeys"></div>
           <div class="key-actions">
@@ -751,7 +754,6 @@ footer .notes{max-width:560px}
           </div>
           <div id="mSubs" data-set="subs"></div>
           <div class="key-actions">
-            <button class="addrow" type="button" id="mAddSubPlatform">+ 添加订阅平台</button>
             <button class="addrow" type="button" data-add="subs">+ 手动填一条</button>
           </div>
           <div id="mSubResult" class="key-result"></div>
@@ -1456,10 +1458,14 @@ modal.addEventListener("click",function(e){
   var clr=e.target.closest("[data-keyclear]");
   if(clr){
     var i=+clr.dataset.keyclear;
-    // 清空已存 key：标记为待删除，保存时写入空值
-    settings.keys[i].masked=null;
-    settings.keys[i].value="";
-    settings.keys[i]._clear=true;
+    var k=settings.keys[i];
+    // 从列表移除，而不是清空字段。
+    // 之前是清 masked/value 但留在列表里，导致「点了没反应」——行还在。
+    // 现在把它从列表拿掉；已存的 key 由保存逻辑写入空值完成删除。
+    if(k.masked)k._clear=true;   // 有已存 key：标待删，保存时写空值真正删掉
+    k.added=false;              // 从界面列表移除
+    k.masked=null;              // 去掉已配置标记——否则过滤条件仍认为它该显示
+    k.value="";
     renderKeyRows();
     return;
   }
@@ -1468,7 +1474,6 @@ modal.addEventListener("click",function(e){
 });
 $("#mAddCustom").addEventListener("click",showAddPlatform);
 $("#mTestKeys").addEventListener("click",testKeys);
-$("#mAddSubPlatform").addEventListener("click",showAddSubPlatform);
 $$(".addrow").forEach(function(b){
   // 只处理带 data-add 的行内「+ 添加」按钮。
   // 没有这层判断的话，同样用 .addrow 样式的「添加自定义平台」「测试连接」
@@ -1512,9 +1517,15 @@ $("#settingsSave").addEventListener("click",function(){
   settings.keys.forEach(function(k){if(k._custom)customs.push(k._custom)});
   if(customs.length)payload.customEndpoints=customs;
   var h=$("#saveHint");
-  function showHint(msg){
-    h.textContent=msg;h.classList.add("on");
-    setTimeout(function(){h.classList.remove("on")},1600);
+  // duration=0 表示常驻：不再一闪而过。
+  // 用户反馈保存提示一闪就消失，根本来不及看，分不清是存上了还是没存上。
+  function showHint(msg, ok, duration){
+    h.textContent=msg;
+    h.classList.add("on");
+    h.classList.remove("ok","err");
+    h.classList.add(ok===false?"err":"ok");
+    clearTimeout(h._t);
+    if(duration>0)h._t=setTimeout(function(){h.classList.remove("on")},duration);
   }
   var saved;
   if (inTauri()) {
@@ -1530,14 +1541,14 @@ $("#settingsSave").addEventListener("click",function(){
   saved.then(function(j){
     // RTK 装卸结果如实反馈：失败时显示真实原因（含冲突提示），不吞成「已保存」
     if(j&&j.rtk){
-      if(j.rtk.ok){showHint("已保存 · "+(j.rtk.message||"RTK 就绪"),2600)}
-      else{showHint("RTK 未安装："+(j.rtk.message||"未知原因"),6000);try{loadSettingsFromD()}catch(e){}}
+      if(j.rtk.ok){showHint("已保存 · "+(j.rtk.message||"RTK 就绪"),true,2600)}
+      else{showHint("RTK 未安装："+(j.rtk.message||"未知原因"),false,6000);try{loadSettingsFromD()}catch(e){}}
     }else{
-      showHint("已保存");
+      showHint("✓ 已保存",true,0);
     }
   }).catch(function(e){
     try{localStorage.setItem("tp-settings",JSON.stringify(payload))}catch(e2){}
-    showHint("保存失败："+((e&&e.message)||"未知错误")+"（仅本地预览生效）",5000);
+    showHint("✗ 保存失败："+((e&&e.message)||"未知错误")+"（仅本地预览生效）",false,0);
   });
 });
 
