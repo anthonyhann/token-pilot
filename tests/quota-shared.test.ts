@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { refreshInlineText } from '../scripts/sync-web-assets.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const shared = readFileSync(resolve(ROOT, 'web/quota-shared.js'), 'utf8').trim();
@@ -40,4 +41,23 @@ test('两个页面都用共享口径，不各自定义阈值/文案', () => {
     }
     assert.ok(text.includes('tpqResetText'), `${rel} 应使用共享的 tpqResetText`);
   }
+});
+
+// ── CRLF 回归：v0.4.11 的 Windows 构建就因为行尾误判挂过 ──
+// Windows CI 上 git 按 autocrlf 把文件检出成 CRLF，逐字节比较会把
+// 内容一致的文件误判成「过期」，必须按 LF 归一后再比较。
+
+test('CRLF 检出的文件不会被误判为过期', () => {
+  const lfHtml = '<script>\n// @inline quota-shared:start（测试）\nvar A=1;\n// @inline quota-shared:end\n</script>\n';
+  const crlfHtml = lfHtml.replace(/\n/g, '\r\n');
+  const body = 'var A=1;\n';
+  // CRLF 的 HTML + LF 的共享源：刷新后应等于 LF 版本（即「内容一致」）
+  assert.equal(refreshInlineText(crlfHtml, 'quota-shared', body), refreshInlineText(lfHtml, 'quota-shared', body));
+  // 已经是最新内容的 CRLF 文件，刷新后不应再变化（幂等）
+  const fresh = refreshInlineText(lfHtml, 'quota-shared', body);
+  assert.equal(refreshInlineText(fresh.replace(/\n/g, '\r\n'), 'quota-shared', body), fresh);
+});
+
+test('缺标记区时报错而不是静默跳过', () => {
+  assert.throws(() => refreshInlineText('<html>no markers</html>', 'quota-shared', 'x'), /缺少 @inline/);
 });
