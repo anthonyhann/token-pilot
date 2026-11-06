@@ -302,9 +302,17 @@ export async function buildDashboardData(
   // ---------- 预算 ----------
   const budgetCny = monthlyBudgetCny(cfg);
   // 固定费只来自订阅登记一处。原先还有个「云端用量 API」区块，
-  // 它和订阅登记性质完全相同（都是往固定费里加一笔），却要用户
-  // 在两处分别维护同一类东西，已合并删除。
-  const fixedFeesCny = (cfg.subscriptions ?? []).reduce((s, x) => s + (x.monthlyCny || 0), 0);
+  // 固定费只算「手动登记」的订阅。
+  //
+  // 关键区分：
+  //   kind=manual（查不了接口的桌面订阅，如 Claude Pro）→ 计入固定成本
+  //   kind=auto（能查剩余量的 Token Plan）→ 不计入固定成本，
+  //     因为它的用量早已计入按量费用，再算一次就重复了
+  //
+  // 旧数据没有 kind 字段，按 manual 处理（保守：宁可多算不漏算）。
+  const fixedFeesCny = (cfg.subscriptions ?? [])
+    .filter((x) => (x as { kind?: string }).kind !== 'auto')
+    .reduce((s, x) => s + (x.monthlyCny || 0), 0);
   const dim = daysInMonth(now);
   const dayOfMonth = now.getDate();
   let budget: DashboardData['budget'] = null;
@@ -909,13 +917,23 @@ export function buildSubscriptions(
   const auto: SettingsData['subscriptions'] = [];
   for (const p of quota?.providers ?? []) {
     const tp = p.tokenPlan;
-    // 只有「确实查到了套餐」且「价格明确」才算自动识别
+    // 只有「确实查到了套餐」且「价格明确」才算自动识别。
+    // monthlyCny 来自接口返回的套餐价格；查不到价格的不自动识别（不猜）。
     if (!p.ok || !tp?.planName || tp.monthlyCny == null) continue;
     auto.push({
       name: tp.planName,
       monthlyCny: tp.monthlyCny,
       origin: 'api',
       providerId: p.id,
+      // Token Plan 是查剩余量的，它的费用已计入按量成本，
+      // 不该再计入固定费——否则同一笔钱算两次。
+      kind: 'auto',
+      // 把接口读到的实时剩余量带给前端，订阅登记里直接显示
+      // 「还剩多少」比只写一个金额有用得多
+      quota: {
+        percent: tp.percent,
+        remainingTokens: tp.remainingTokens,
+      },
     });
   }
   // 自动识别的平台，把用户可能手填过的同名条目过滤掉，防止重复计费
@@ -926,7 +944,12 @@ export function buildSubscriptions(
   );
   return [
     ...auto,
-    ...kept.map((m) => ({ name: m.name, monthlyCny: m.monthlyCny, origin: 'manual' as const })),
+    ...kept.map((m) => ({
+      name: m.name,
+      monthlyCny: m.monthlyCny,
+      origin: 'manual' as const,
+      kind: 'manual' as const,
+    })),
   ];
 }
 

@@ -367,6 +367,7 @@ footer .notes{max-width:560px}
 .sub-auto-amt{font-size:12px;font-weight:800;color:var(--fg)}
 .sub-auto-tag{font-size:10px;font-weight:700;color:var(--pos-text);background:color-mix(in oklab,var(--pos) 14%,transparent);
   border-radius:6px;padding:1px 6px;white-space:nowrap}
+.sub-auto-detail{display:block;font-size:10px;color:var(--muted);font-weight:400;margin-top:1px}
 
 /* API Key 区块 */
 .key-empty-note{font-size:11px;color:var(--muted);background:color-mix(in oklab,var(--info) 8%,transparent);
@@ -754,6 +755,7 @@ footer .notes{max-width:560px}
           </div>
           <div id="mSubs" data-set="subs"></div>
           <div class="key-actions">
+            <button class="addrow" type="button" id="mAddSubPlatform">+ 添加订阅平台</button>
             <button class="addrow" type="button" data-add="subs">+ 手动填一条</button>
           </div>
           <div id="mSubResult" class="key-result"></div>
@@ -1106,7 +1108,13 @@ function loadSettingsFromD(){
     models:(s.models||[]).map(function(m){return {n:String(m.name),i:String(m.inputCny),o:String(m.outputCny),c:String(m.cacheReadCny)}}),
     // origin: 'api' / 'ccswitch' 都算自动来的，不允许手改（改了就重复计费）
     subs:(s.subscriptions||[]).map(function(m){
-      return {n:String(m.name),p:String(m.monthlyCny),origin:m.origin||'manual'};
+      // kind: auto=能查剩余量（不计固定费）/ manual=查不了（计固定费）
+      // quota: 接口读到的实时剩余量（percent / remainingTokens）
+      return {
+        n:String(m.name), p:String(m.monthlyCny),
+        origin:m.origin||'manual', kind:m.kind||'manual',
+        quota:m.quota||null
+      };
     }),
     budget:s.monthlyBudgetCny==null?"":String(s.monthlyBudgetCny),
     autoCompact:(s.autoCompact)||{enabled:false},
@@ -1278,6 +1286,8 @@ function showAddSubPlatform(){
   if(!box)return;
   // 只列「已实现」的订阅平台：未验证的接口调用必然失败，
   // 把它们放进下拉框等于给用户一个必然报错的选项。
+  // 下拉分两组：能自动查询的（读接口拿剩余量）+ 只能手动登记的（填金额）。
+  // 手动登记不需要 key，点了直接加一行空行填名称和金额。
   var avail=settings.keys.filter(function(k){
     return k.scenario==='subscription' && k.implemented && !k.added && !k.masked;
   });
@@ -1294,12 +1304,23 @@ function showAddSubPlatform(){
       '<div class="kr-line" style="color:var(--muted)">现在可以点「手动填一条」登记固定月费</div>';
     return;
   }
+  var MANUAL='__manual__';
+  // 先把自动查询的平台拼好，再插进模板。之前把 avail.map(...).join('')
+  // 内联在三元运算符里，括号嵌套太深导致语法错误——整个脚本都崩了，
+  // settings 面板初始化失败，所有设置项都点不动。
+  var autoOpts='';
+  if(avail.length){
+    autoOpts=avail.map(function(k){
+      return '<option value="'+esc(k.id+'|'+k.scenario)+'">'+esc(k.displayName)+(k.needsAdmin?'（需 admin key）':'')+'</option>';
+    }).join('');
+  }
   box.innerHTML =
     '<div class="key-custom">'+
       '<select id="spPick" aria-label="选择订阅平台" style="grid-column:1/-1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px;color:var(--fg)">'+
-        avail.map(function(k){
-          return '<option value="'+esc(k.id+'|'+k.scenario)+'">'+esc(k.displayName)+(k.needsAdmin?'（需 admin key）':'')+'</option>';
-        }).join('')+
+        autoOpts+
+        '<optgroup label="手动登记（查不了接口，只记金额）">'+
+        '<option value="'+MANUAL+'">手动填一条</option>'+
+        '</optgroup>'+
       '</select>'+
       '<input id="spKey" type="password" placeholder="粘贴该平台的 API Key" aria-label="订阅平台 API Key" style="grid-column:1/-1" autocomplete="off" spellcheck="false">'+
     '</div>'+
@@ -1309,8 +1330,21 @@ function showAddSubPlatform(){
     '</div>'+
     '<div id="spHint" class="kr-line" style="color:var(--muted)">填 key 后点「查询套餐」，自动读出套餐名和月费填进订阅登记</div>';
   $("#spCancel").addEventListener("click",function(){box.innerHTML="";});
+  // 选手动登记时隐藏 key 输入
+  var spKeyInput=$("#spKey");
+  $("#spPick").addEventListener("change",function(){
+    var isManual=($("#spPick").value===MANUAL);
+    if(spKeyInput)spKeyInput.style.display=isManual?"none":"";
+  });
   $("#spOk").addEventListener("click",async function(){
     var v=$("#spPick").value||"";
+    // 手动登记：直接加一条空行，不需要 key
+    if(v===MANUAL){
+      settings.subs.push({n:"",p:"",origin:"manual"});
+      renderSet();
+      box.innerHTML='<div class="kr-line"><span class="kr-ok">已加一行</span><span>填名称和月费即可</span></div>';
+      return;
+    }
     var parts=v.split("|");
     var id=parts[0], sc=parts[1];
     var key=($("#spKey").value||"").trim();
@@ -1404,14 +1438,26 @@ function collectKeys(){
 
 function renderSet(){
   $("#mModels").innerHTML=settings.models.map(function(r,i){return '<div class="m-row r4"><input data-k="n" data-i="'+i+'" value="'+esc(r.n)+'" aria-label="模型名" placeholder="模型名，如 glm-5.3"><input data-k="i" data-i="'+i+'" value="'+esc(r.i)+'" aria-label="输入单价"><input data-k="o" data-i="'+i+'" value="'+esc(r.o)+'" aria-label="输出单价"><input data-k="c" data-i="'+i+'" value="'+esc(r.c)+'" aria-label="缓存读单价"><button class="delrow" type="button" data-del="models" data-i="'+i+'" aria-label="删除此行">×</button></div>'}).join("");
+  // 订阅与套餐分两组：
+  //   auto  —— 能查剩余量（Token Plan / Coding Plan），接口读真实数据，
+  //            费用已计入按量成本，不再计入固定费
+  //   manual —— 查不了接口（Claude Pro 这类桌面订阅），只记金额进固定成本
   var ORIGIN_TAG={api:'接口自动识别',ccswitch:'CC Switch 读取',manual:''};
-  var ORIGIN_TIP={api:'来自平台接口，已计入当月固定费用；手填会重复计费，故不可编辑',
-                  ccswitch:'来自本机 CC Switch 配置，自动读取；如需修改请到 CC Switch 里改'};
+  var ORIGIN_TIP={api:'来自平台接口；费用已计入当月按量成本，不再计入固定费',
+                  ccswitch:'来自本机 CC Switch 配置；如需修改请到 CC Switch 里改'};
   $("#mSubs").innerHTML=settings.subs.map(function(r,i){
-    if(r.origin&&r.origin!=='manual'){
-      // 自动来的（接口或 CC Switch）：只读，禁止编辑和删除。
-      // 允许改动会导致「自动拿到一份 + 手填一份」重复计费。
-      return '<div class="m-row r2 sub-auto"><span class="sub-auto-name" title="'+esc(ORIGIN_TIP[r.origin]||'')+'">'+esc(r.n)+'</span>'+
+    var isAuto=r.kind==='auto'||(r.origin&&r.origin!=='manual');
+    if(isAuto){
+      // 自动查询行：显示剩余量（若有），标注来源，只读
+      var detail='';
+      if(r.quota){
+        var q=r.quota;
+        var parts=[];
+        if(q.percent!=null)parts.push(Math.round(q.percent)+'%');
+        if(q.remainingTokens!=null)parts.push('剩 '+fmtTok(q.remainingTokens));
+        detail=parts.join(' · ');
+      }
+      return '<div class="m-row r2 sub-auto"><span class="sub-auto-name" title="'+esc(ORIGIN_TIP[r.origin]||'')+'">'+esc(r.n)+(detail?'<span class="sub-auto-detail">'+esc(detail)+'</span>':'')+'</span>'+
         '<span class="sub-auto-amt">¥'+esc(r.p)+'</span>'+
         '<span class="sub-auto-tag">'+esc(ORIGIN_TAG[r.origin]||'自动')+'</span></div>';
     }
@@ -1474,6 +1520,7 @@ modal.addEventListener("click",function(e){
 });
 $("#mAddCustom").addEventListener("click",showAddPlatform);
 $("#mTestKeys").addEventListener("click",testKeys);
+$("#mAddSubPlatform").addEventListener("click",showAddSubPlatform);
 $$(".addrow").forEach(function(b){
   // 只处理带 data-add 的行内「+ 添加」按钮。
   // 没有这层判断的话，同样用 .addrow 样式的「添加自定义平台」「测试连接」

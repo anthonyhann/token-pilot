@@ -134,6 +134,17 @@ export interface SettingsData {
     origin?: 'api' | 'ccswitch' | 'manual';
     /** 自动来源的平台 id，用于和「订阅额度与余额」板块对应 */
     providerId?: string;
+    /**
+     * 查询形态：
+     *   auto  —— 能查剩余量（Token Plan / Coding Plan），接口读真实数据，
+     *            金额只是参考，**不计入当月固定成本**（已包含在按量费用里）
+     *   manual —— 查不了接口（Claude Pro 这类桌面订阅），只能记金额，
+     *            计入当月固定成本
+     * 旧数据没有这个字段，按 manual 处理（保守：多算钱好过漏算）。
+     */
+    kind?: 'auto' | 'manual';
+    /** 自动查询的条目才有：接口读到的实时剩余量 */
+    quota?: { percent?: number; remainingTokens?: number } | null;
   }[];
   /**
    * 各平台的 API Key 配置状态。
